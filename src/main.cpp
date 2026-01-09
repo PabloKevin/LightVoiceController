@@ -4,10 +4,15 @@
 #include "credentials.h"
 
 // --- Configuration ---
+#define potentionmeterPin 35
+#define microphonePin 34
+
 const char* wizIP = "192.168.1.2"; // Replace with your light's IP
 const int wizPort = 38899;
 
 WiFiUDP udp;
+int temp;
+int brightness;
 
 // Function to send command to Wiz Light
 void sendWizCommand(const char* jsonCommand) {
@@ -34,7 +39,7 @@ void turnOff() {
  * @param brightness: 10 to 100 (percentage)
  * @param kelvin: 2700 to 6500 (standard range for most WiZ bulbs)
  */
-void setWizLight(int brightness, int kelvin) {
+void setWizLight(int brightness, int kelvin, int sceneID = 6) {
     // Constrain values to prevent errors
     brightness = constrain(brightness, 10, 100);
     kelvin = constrain(kelvin, 2700, 6500);
@@ -47,6 +52,7 @@ void setWizLight(int brightness, int kelvin) {
     params["state"] = true;
     params["dimming"] = brightness;
     params["temp"] = kelvin;
+    params["sceneID"] = sceneID;
 
     // Serialize JSON to a string
     char buffer[128];
@@ -60,9 +66,33 @@ void setWizLight(int brightness, int kelvin) {
     Serial.printf("Sent: Brightness %d%%, Temp %dK\n", brightness, kelvin);
 }
 
+void Pot2Light() {
+    int off_threshold = 80;
+    int minTemp_threshold = 500;
+
+    int potValue = analogRead(potentionmeterPin);
+    if (potValue < off_threshold) {
+        turnOff();
+        brightness = 0;
+        return;
+    } else if (potValue < minTemp_threshold) {
+        setWizLight(10, 2700);
+    }
+
+    int new_brightness = map(potValue, off_threshold, 4095, 10, 100); // Map to 10-100%
+    if (abs(new_brightness - brightness) < 3) {
+        return; // Avoid small changes
+    }
+    brightness = new_brightness;
+    temp = map(potValue, off_threshold, 4095, 2700, 6500); // Map to 2700-6500K 
+    setWizLight(brightness, temp);
+}
+
 void setup() {
     Serial.begin(115200);
     pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(potentionmeterPin, INPUT);
+    pinMode(microphonePin, INPUT);
     
     // Connect to WiFi
     WiFi.begin(ssid, password);
@@ -72,36 +102,14 @@ void setup() {
     }
     Serial.println("\nWiFi Connected!");
     digitalWrite(LED_BUILTIN, HIGH);
+    delay(1000);
+    digitalWrite(LED_BUILTIN, LOW);
     
     udp.begin(wizPort); // Start UDP
+    delay(500);
 }
 
-bool ramp = false;
-int temp = 4000;
-bool on = true;
-
 void loop() {
-    if (Serial.available() > 0) {
-        String command = "";
-        command = Serial.readStringUntil('\n');
-        switch (command.charAt(0)) {
-            case '0': turnOff(); on=false; break;
-            case '1': turnOn(); on=true; break;
-            case 'W': temp = 4000; break;
-            case 'Y': temp = 6500; break;
-            case 'R': temp = 2700; break;
-            case 's': ramp = true; break;
-            case 'f': ramp = false; break;
-            default: Serial.println("Unknown command"); return;
-        }
-        if (ramp){
-            for (int b = 10; b <= 100; b += 5) {
-                setWizLight(b, temp); // 4000K is a neutral white
-                delay(500); 
-            }
-        } else if (on){
-            setWizLight(90, temp);
-        }
-        delay(1000);
-    }
+    Pot2Light();
+    delay(200);
 }
