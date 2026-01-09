@@ -7,16 +7,60 @@
 #define potentionmeterPin 35
 #define microphonePin 34
 
-const char* wizIP = "192.168.1.2"; // Replace with your light's IP
+char bedroomLightIP[16] = "";
 const int wizPort = 38899;
 
 WiFiUDP udp;
 int temp;
 int brightness;
+int potValue;
+
+
+// Function to discover the light IP by its MAC address
+bool findLightIP(const char* targetMAC = bedroom_light_mac, char* targetIP = bedroomLightIP) {
+    Serial.println("Searching for WiZ light...");
+    
+    IPAddress broadcastIP(255, 255, 255, 255);
+    const char* discoverCmd = "{\"method\":\"getSystemConfig\",\"params\":{}}";
+    
+    udp.beginPacket(broadcastIP, wizPort);
+    udp.print(discoverCmd);
+    udp.endPacket();
+
+    unsigned long startMillis = millis();
+    while (millis() - startMillis < 2000) {
+        int packetSize = udp.parsePacket();
+        if (packetSize) {
+            char incomingPacket[512];
+            int len = udp.read(incomingPacket, 511);
+            incomingPacket[len] = '\0';
+
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, incomingPacket);
+            
+            if (!error) {
+                const char* mac = doc["result"]["mac"];
+                if (mac && strcasecmp(mac, targetMAC) == 0) {
+                    // COPIA CORRECTA: Copiamos el contenido a nuestro buffer seguro
+                    strncpy(targetIP, udp.remoteIP().toString().c_str(), 15);
+                    targetIP[15] = '\0'; // Aseguramos el fin de cadena
+                    Serial.printf("Found Light! IP: %s\n", targetIP);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
 // Function to send command to Wiz Light
-void sendWizCommand(const char* jsonCommand) {
-    udp.beginPacket(wizIP, wizPort);
+void sendWizCommand(const char* jsonCommand, char* targetIP=bedroomLightIP) {
+    if (targetIP[0] == '\0'){ // Don't send if we don't have an IP
+        while (!findLightIP()) {
+            delay(3000); 
+        }
+    }; 
+    udp.beginPacket(targetIP, wizPort);
     udp.print(jsonCommand);
     udp.endPacket();
     Serial.print("Sent: ");
@@ -39,7 +83,12 @@ void turnOff() {
  * @param brightness: 10 to 100 (percentage)
  * @param kelvin: 2700 to 6500 (standard range for most WiZ bulbs)
  */
-void setWizLight(int brightness, int kelvin, int sceneID = 6) {
+void setWizLight(int brightness, int kelvin, int sceneID = 6, char* targetIP=bedroomLightIP) {
+    if (targetIP[0] == '\0'){ // Don't send if we don't have an IP
+        while (!findLightIP()) {
+            delay(3000); 
+        }
+    }; 
     // Constrain values to prevent errors
     brightness = constrain(brightness, 10, 100);
     kelvin = constrain(kelvin, 2700, 6500);
@@ -59,7 +108,7 @@ void setWizLight(int brightness, int kelvin, int sceneID = 6) {
     serializeJson(doc, buffer);
 
     // Send via UDP
-    udp.beginPacket(wizIP, wizPort);
+    udp.beginPacket(targetIP, wizPort);
     udp.print(buffer);
     udp.endPacket();
 
@@ -67,24 +116,26 @@ void setWizLight(int brightness, int kelvin, int sceneID = 6) {
 }
 
 void Pot2Light() {
-    int off_threshold = 80;
-    int minTemp_threshold = 500;
+    int off_threshold = 120;
+    int minTemp_threshold = 600;
 
-    int potValue = analogRead(potentionmeterPin);
+    int newPotValue = analogRead(potentionmeterPin);
+    if (abs(newPotValue - potValue) < 82) {
+        return; // Avoid small changes, 2% 4095 ~ 82 
+    }
+    potValue = newPotValue;
+
     if (potValue < off_threshold) {
         turnOff();
         brightness = 0;
         return;
     } else if (potValue < minTemp_threshold) {
         setWizLight(10, 2700);
+        return;
     }
 
-    int new_brightness = map(potValue, off_threshold, 4095, 10, 100); // Map to 10-100%
-    if (abs(new_brightness - brightness) < 3) {
-        return; // Avoid small changes
-    }
-    brightness = new_brightness;
-    temp = map(potValue, off_threshold, 4095, 2700, 6500); // Map to 2700-6500K 
+    brightness = map(potValue, minTemp_threshold, 4095, 10, 100); // Map to 10-100%
+    temp = map(potValue, minTemp_threshold, 4095, 2700, 6500); // Map to 2700-6500K 
     setWizLight(brightness, temp);
 }
 
@@ -107,6 +158,13 @@ void setup() {
     
     udp.begin(wizPort); // Start UDP
     delay(500);
+
+    // Keep trying to find the light before starting the main loop
+    while (!findLightIP()) {
+        delay(3000); 
+    }
+    digitalWrite(LED_BUILTIN, HIGH);
+    
 }
 
 void loop() {
