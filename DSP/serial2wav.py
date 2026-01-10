@@ -10,7 +10,7 @@ from scipy.io import wavfile
 # --- Configuración ---
 SERIAL_PORT = '/dev/ttyUSB0'  # Cambia esto según tu puerto 
 BAUD_RATE = 115200
-SAMPLE_RATE = 10000           # Debe coincidir con el ESP32
+SAMPLE_RATE = 12000           # Debe coincidir con el ESP32
 TIME_TO_RECORD = 2 #Segundos
 OUTPUT_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/RawAudioDataSet/"
 SAMPLES_TO_READ = SAMPLE_RATE * TIME_TO_RECORD       # 16000 Hz * 2 segundos

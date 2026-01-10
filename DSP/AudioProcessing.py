@@ -3,8 +3,9 @@ from scipy.signal import butter, lfilter
 from scipy.io import wavfile
 from matplotlib import pyplot as plt
 from scipy.fft import fft, fftfreq
+from scipy.signal import medfilt
 
-def butter_bandpass(lowcut, highcut, fs, order=5):
+def bandpass_filter(lowcut, highcut, fs, order=5):
     """
     Crea los coeficientes del filtro Butterworth.
     lowcut: Frecuencia mínima
@@ -18,11 +19,27 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     b, a = butter(order, [low, high], btype='band')
     return b, a
 
+def bandstop_filter(data, lowcut, highcut, fs, order=5):
+    """
+    Aplica un filtro que ELIMINA las frecuencias entre lowcut y highcut.
+    lowcut: Inicio de la banda a eliminar (Hz)
+    highcut: Fin de la banda a eliminar (Hz)
+    fs: Frecuencia de muestreo (16000 Hz)
+    """
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    
+    # btype='bandstop' es la clave aquí
+    b, a = butter(order, [low, high], btype='bandstop')
+    y = lfilter(b, a, data)
+    return y
+
 def apply_bandpass_filter(data, lowcut, highcut, fs, order=5):
     """
     Aplica el filtro a un array de datos.
     """
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    b, a = bandpass_filter(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
 
@@ -76,7 +93,7 @@ def plot_frequency_spectrum(data, fs, title="Espectro de Frecuencia"):
     plt.grid(True)
     
     # Si quieres ver mejor la voz humana, limita el eje X a 4000Hz
-    #plt.xlim(0, 4000) 
+    plt.xlim(0, 1000) 
     
     plt.show()
 
@@ -87,23 +104,60 @@ def gaussian_blur(data, window_size=7):
     
     # Aplicamos la convolución
     data_suave = np.convolve(data, window, mode='same')
-    return data_suave.astype(np.int16)
+    return data_suave
+
+def audio_blur(data, window_size=5):
+    """
+    Aplica una convolución (blur) a la señal.
+    window_size: qué tan fuerte es el blur. (3-11 es lo ideal)
+    """
+    kernel = np.ones(window_size) / window_size
+    # mode='same' mantiene la señal del mismo tamaño
+    return np.convolve(data, kernel, mode='same')
+
+from scipy.signal import butter, sosfilt, sosfreqz
+
+def apply_bandstop_stable(data, lowcut, highcut, fs, order=4):
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    
+    # Usamos 'sos' (Second-Order Sections) en lugar de 'ba'
+    sos = butter(order, [low, high], btype='bandstop', output='sos')
+    
+    # Aplicamos sosfilt en lugar de lfilter
+    y = sosfilt(sos, data)
+    return y
+
 
 # 1. Leer el archivo que grabaste
-wavFile = "RawAudioDataSet/recording_12.wav"
+wavFile = "RawAudioDataSet/recording_26.wav"
 fs, data = wavfile.read(wavFile)
 
-data_blur = gaussian_blur(data, window_size = 7)
+data = data/np.max(np.abs(data))
+data = data - np.mean(data)  # Eliminar offset DC
+data = data[len(data)//10:]
+
+data = audio_blur(data, window_size = 5)
+data = gaussian_blur(data, window_size = 13)
+data = medfilt(data, kernel_size=59) #
 
 # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
-data_filtrada = apply_bandpass_filter(data_blur, 250.0, 4000.0, fs, order=6)[len(data)//128 : -len(data)//256]
+data_filtrada = apply_bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
 
-# 3. (Opcional) Normalizar el audio para que se escuche más fuerte
-data_filtrada = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767)
+data_filtrada = apply_bandstop_stable(data_filtrada, 50.0, 300.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 390.0, 410.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 450.0, 475.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 410.0, 430.0, fs)
 
-# 4. Guardar el resultado limpio
-wavfile.write("ProcessedAudioDataSet/"+wavFile.split("/")[-1], fs, data_filtrada)
-print("Filtro aplicado con éxito.")
+#data_dB = 20 * np.log10(np.abs(data_filtrada))
 
 plotSignal(data_filtrada, fs, wavFile.split("/")[-1]+"_Filtered")
 plot_frequency_spectrum(data_filtrada, fs, title="Espectro de Frecuencia - Audio Filtrado")
+
+
+# 3. Guardar el resultado limpio y normalizado en int16
+data_filtrada = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767).astype(np.int16)
+wavfile.write("ProcessedAudioDataSet/"+wavFile.split("/")[-1], fs, data_filtrada)
+print("Filtro aplicado con éxito.")
+

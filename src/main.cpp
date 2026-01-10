@@ -7,7 +7,7 @@
 #define potentionmeterPin 35
 #define microphonePin 34
 
-#define SAMPLE_RATE 10000
+#define SAMPLE_RATE 12000
 #define RECORD_TIME 2 // segundos
 #define TOTAL_SAMPLES (SAMPLE_RATE * RECORD_TIME)
 
