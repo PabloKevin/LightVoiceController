@@ -7,6 +7,14 @@
 #define potentionmeterPin 35
 #define microphonePin 34
 
+#define SAMPLE_RATE 10000
+#define RECORD_TIME 2 // segundos
+#define TOTAL_SAMPLES (SAMPLE_RATE * RECORD_TIME)
+
+// Reservamos el buffer en la memoria del ESP32
+uint16_t audioBuffer[TOTAL_SAMPLES]; 
+bool isRecording = false;
+
 char bedroomLightIP[16] = "";
 const int wizPort = 38899;
 
@@ -139,11 +147,43 @@ void Pot2Light() {
     setWizLight(brightness, temp);
 }
 
+void recordAudio() {
+    Serial.println(">>> Iniciando grabación (2 seg)...");
+    
+    // Calculamos el tiempo entre muestras en microsegundos
+    unsigned int sampleDelay = 1000000 / SAMPLE_RATE;
+    unsigned long startTime = millis();
+
+    for (int i = 0; i < TOTAL_SAMPLES; i++) {
+        unsigned long nextSampleTime = micros() + sampleDelay;
+        
+        audioBuffer[i] = analogRead(microphonePin);
+        
+        // Esperamos con precisión de microsegundos para mantener la frecuencia
+        while (micros() < nextSampleTime) {
+            // Espera activa para precisión
+        }
+    }
+
+    Serial.printf(">>> Grabación finalizada. Tiempo total: %lu ms\n", millis() - startTime);
+}
+
+// Función para enviar los datos al Serial y graficarlos (Serial Plotter)
+void playBackSerial() {
+    Serial.println("Enviando datos de audio al monitor...");
+    for (int i = 0; i < TOTAL_SAMPLES; i++) {
+        Serial.println(audioBuffer[i]);
+        // delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
+    }
+}
+
+
 void setup() {
     Serial.begin(115200);
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(potentionmeterPin, INPUT);
     pinMode(microphonePin, INPUT);
+    analogReadResolution(12); // Máxima resolución del ADC
     
     // Connect to WiFi
     WiFi.begin(ssid, password);
@@ -163,11 +203,23 @@ void setup() {
     while (!findLightIP()) {
         delay(3000); 
     }
-    digitalWrite(LED_BUILTIN, HIGH);
+    //digitalWrite(LED_BUILTIN, HIGH);
+
+    Serial.println("Presiona 'g' en el monitor serial para grabar.");
     
 }
 
 void loop() {
-    Pot2Light();
-    delay(200);
+    //Pot2Light();
+    //delay(200);
+
+    if (Serial.available() > 0) {
+        char c = Serial.read();
+        if (c == 'g') {
+            digitalWrite(LED_BUILTIN, HIGH);
+            recordAudio();
+            digitalWrite(LED_BUILTIN, LOW);
+            playBackSerial();
+        }
+    }
 }
