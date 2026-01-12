@@ -4,6 +4,8 @@ from scipy.io import wavfile
 from matplotlib import pyplot as plt
 from scipy.fft import fft, fftfreq
 from scipy.signal import medfilt
+import librosa
+import librosa.display
 
 def bandpass_filter(data, lowcut, highcut, fs, order=5):
     """
@@ -138,6 +140,26 @@ def apply_bandstop_stable(data, lowcut, highcut, fs, order=4):
     y = sosfilt(sos, data)
     return y
 
+def plot_mfcc(wav_file, n_mfcc=13, fs=12000):
+    # 1. Cargar el audio
+    # sr=None mantiene la frecuencia original del archivo
+    y, sr = librosa.load(wav_file, sr=fs)
+
+    # 2. Calcular los MFCCs
+    # n_mfcc: cantidad de coeficientes (para ESP32, entre 10 y 20 es ideal)
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
+
+    # 3. Visualización
+    plt.figure(figsize=(10, 4))
+    librosa.display.specshow(mfccs, x_axis='time', sr=sr)
+    
+    plt.colorbar(format='%+2.0f dB')
+    plt.title(f'MFCCs - {wav_file}')
+    plt.ylabel('Coeficientes MFCC')
+    plt.xlabel('Tiempo')
+    plt.tight_layout()
+    plt.show()
+
 
 # 1. Leer el archivo que grabaste
 wavFile = "DataSets/RawAudio/luzCalida_0.wav"
@@ -176,4 +198,4 @@ plot_frequency_spectrum(data_filtrada, fs, title="Espectro de Frecuencia - Audio
 data_filtrada = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767).astype(np.int16)
 wavfile.write("DataSets/ProcessedAudio/"+wavFile.split("/")[-1], fs, data_filtrada)
 print("Filtro aplicado con éxito.")
-
+plot_mfcc("DataSets/ProcessedAudio/"+wavFile.split("/")[-1])

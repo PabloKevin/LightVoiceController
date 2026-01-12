@@ -15,7 +15,7 @@ TIME_TO_RECORD = 2 #Segundos
 OUTPUT_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio/"
 SAMPLES_TO_READ = SAMPLE_RATE * TIME_TO_RECORD       # 16000 Hz * 2 segundos
 
-OUTPUT_FILE = OUTPUT_PATH + "luzFocus_0.wav"
+OUTPUT_FILE = OUTPUT_PATH + "ambiente_0.wav"
 while Path(OUTPUT_FILE).exists():
     base, ext = OUTPUT_FILE.rsplit('_', 1)
     number = int(ext.split('.')[0]) + 1
@@ -87,4 +87,4 @@ def plot_wav(filename):
 
 if __name__ == "__main__":
     main()
-    plot_wav(OUTPUT_FILE)
+    #plot_wav(OUTPUT_FILE)
