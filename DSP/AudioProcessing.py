@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.fft import fft, fftfreq
 from scipy.signal import medfilt
 
-def bandpass_filter(lowcut, highcut, fs, order=5):
+def bandpass_filter(data, lowcut, highcut, fs, order=5):
     """
     Crea los coeficientes del filtro Butterworth.
     lowcut: Frecuencia mínima
@@ -17,7 +17,8 @@ def bandpass_filter(lowcut, highcut, fs, order=5):
     low = lowcut / nyquist
     high = highcut / nyquist
     b, a = butter(order, [low, high], btype='band')
-    return b, a
+    y = lfilter(b, a, data)
+    return y
 
 def bandstop_filter(data, lowcut, highcut, fs, order=5):
     """
@@ -35,13 +36,21 @@ def bandstop_filter(data, lowcut, highcut, fs, order=5):
     y = lfilter(b, a, data)
     return y
 
-def apply_bandpass_filter(data, lowcut, highcut, fs, order=5):
+def highpass_filter(data, cutoff, fs, order=5):
     """
-    Aplica el filtro a un array de datos.
+    Aplica un filtro que ELIMINA las frecuencias entre lowcut y highcut.
+    lowcut: Inicio de la banda a eliminar (Hz)
+    highcut: Fin de la banda a eliminar (Hz)
+    fs: Frecuencia de muestreo (16000 Hz)
     """
-    b, a = bandpass_filter(lowcut, highcut, fs, order=order)
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    
+    # btype='bandstop' es la clave aquí
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
     y = lfilter(b, a, data)
     return y
+    
 
 def plotSignal(data, sample_rate, filename):
     # Crear el eje del tiempo en segundos
@@ -93,7 +102,7 @@ def plot_frequency_spectrum(data, fs, title="Espectro de Frecuencia"):
     plt.grid(True)
     
     # Si quieres ver mejor la voz humana, limita el eje X a 4000Hz
-    plt.xlim(0, 1000) 
+    #plt.xlim(0, 800) 
     
     plt.show()
 
@@ -131,24 +140,31 @@ def apply_bandstop_stable(data, lowcut, highcut, fs, order=4):
 
 
 # 1. Leer el archivo que grabaste
-wavFile = "RawAudioDataSet/recording_26.wav"
+wavFile = "DataSets/RawAudio/luzCalida_0.wav"
 fs, data = wavfile.read(wavFile)
 
 data = data/np.max(np.abs(data))
 data = data - np.mean(data)  # Eliminar offset DC
-data = data[len(data)//10:]
+data = data[len(data)//15:]
 
 data = audio_blur(data, window_size = 5)
 data = gaussian_blur(data, window_size = 13)
 data = medfilt(data, kernel_size=59) #
 
 # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
-data_filtrada = apply_bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
+data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
+data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
 
-data_filtrada = apply_bandstop_stable(data_filtrada, 50.0, 300.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 390.0, 410.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
+"""data_filtrada = apply_bandstop_stable(data_filtrada, 390.0, 410.0, fs)
 data_filtrada = apply_bandstop_stable(data_filtrada, 450.0, 475.0, fs)
 data_filtrada = apply_bandstop_stable(data_filtrada, 410.0, 430.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 310.0, 325.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 355.0, 370.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 660.0, 685.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 560.0, 585.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 510.0, 540.0, fs)
+data_filtrada = apply_bandstop_stable(data_filtrada, 200.0, 300.0, fs)"""
 
 #data_dB = 20 * np.log10(np.abs(data_filtrada))
 
@@ -158,6 +174,6 @@ plot_frequency_spectrum(data_filtrada, fs, title="Espectro de Frecuencia - Audio
 
 # 3. Guardar el resultado limpio y normalizado en int16
 data_filtrada = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767).astype(np.int16)
-wavfile.write("ProcessedAudioDataSet/"+wavFile.split("/")[-1], fs, data_filtrada)
+wavfile.write("DataSets/ProcessedAudio/"+wavFile.split("/")[-1], fs, data_filtrada)
 print("Filtro aplicado con éxito.")
 
