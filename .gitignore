@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 include/credentials.h
+DSP/DataSets/RawAudio_TrainSet_Augmented/*
+DSP/DataSets/RawAudio_TestSet_Augmented/*
