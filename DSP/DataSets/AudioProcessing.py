@@ -161,41 +161,39 @@ def plot_mfcc(wav_file, n_mfcc=13, fs=12000):
     plt.show()
 
 
-# 1. Leer el archivo que grabaste
-wavFile = "DataSets/RawAudio/luzCalida_0.wav"
-fs, data = wavfile.read(wavFile)
+def process_audio_wav(wav_path, output_path=None, plot=False):
+    wavFile = wav_path
+    fs, data = wavfile.read(wavFile)
 
-data = data/np.max(np.abs(data))
-data = data - np.mean(data)  # Eliminar offset DC
-data = data[len(data)//15:]
+    data = data/np.max(np.abs(data))
+    data = data - np.mean(data)  # Eliminar offset DC
+    data = data[len(data)//15:]
 
-data = audio_blur(data, window_size = 5)
-data = gaussian_blur(data, window_size = 13)
-data = medfilt(data, kernel_size=59) #
+    data = audio_blur(data, window_size = 5)
+    data = gaussian_blur(data, window_size = 13)
+    data = medfilt(data, kernel_size=59) #
 
-# 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
-data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
-data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
+    # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
+    data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
+    data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
 
-data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
-"""data_filtrada = apply_bandstop_stable(data_filtrada, 390.0, 410.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 450.0, 475.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 410.0, 430.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 310.0, 325.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 355.0, 370.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 660.0, 685.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 560.0, 585.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 510.0, 540.0, fs)
-data_filtrada = apply_bandstop_stable(data_filtrada, 200.0, 300.0, fs)"""
+    data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
 
-#data_dB = 20 * np.log10(np.abs(data_filtrada))
+    if plot:
+        #data_dB = 20 * np.log10(np.abs(data_filtrada))
+        plotSignal(data_filtrada, fs, wavFile.split("/")[-1]+"_Filtered")
+        plot_frequency_spectrum(data_filtrada, fs, title="Espectro de Frecuencia - Audio Filtrado")
 
-plotSignal(data_filtrada, fs, wavFile.split("/")[-1]+"_Filtered")
-plot_frequency_spectrum(data_filtrada, fs, title="Espectro de Frecuencia - Audio Filtrado")
+    if output_path is not None:
+        # 3. Guardar el resultado limpio y normalizado en int16
+        data_filtrada_int16 = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767).astype(np.int16)
+        wavfile.write(output_path+wavFile.split("/")[-1], fs, data_filtrada_int16)
+        print("Filtro aplicado con éxito.")
+        plot_mfcc(output_path+wavFile.split("/")[-1])
+    
+    return data_filtrada, fs
 
-
-# 3. Guardar el resultado limpio y normalizado en int16
-data_filtrada = np.int16(data_filtrada / np.max(np.abs(data_filtrada)) * 32767).astype(np.int16)
-wavfile.write("DataSets/ProcessedAudio/"+wavFile.split("/")[-1], fs, data_filtrada)
-print("Filtro aplicado con éxito.")
-plot_mfcc("DataSets/ProcessedAudio/"+wavFile.split("/")[-1])
+if __name__ == "__main__":
+    wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/luzAlta_7_aug_2.wav"
+    output_path = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/ProcessedAudio/"
+    process_audio_wav(wav_file, output_path, plot=True)
