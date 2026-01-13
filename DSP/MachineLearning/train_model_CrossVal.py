@@ -85,7 +85,7 @@ if __name__ == "__main__":
     
 
     # 3. Configuración de Cross-Validation
-    K = 5
+    K = 4
     folds = get_kfold_indices(X, k=K)
     all_histories = []
     input_shape = (13, 64, 1)
