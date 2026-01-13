@@ -3,31 +3,31 @@ from tensorflow.keras.models import load_model
 
 def build_model(input_shape, num_classes):
     model = models.Sequential([
-        # Primera capa: Convolución estándar para captar rasgos básicos
-        layers.SeparableConv2D(256, (5, 5), activation='leaky_relu', input_shape=input_shape, padding='same'),
-        layers.AvgPool2D((2, 2)),
+        # --- BLOQUE CONVOLUCIONAL (Extractor) ---
+        # input_shape: (13, 64, 1) -> (MFCCs, Tiempo, Canal)
+        layers.Conv2D(32, (3, 3), activation='leaky_relu', padding='same', input_shape=input_shape),
+        layers.MaxPooling2D((1, 2)), # Reducimos solo la dimensión temporal para mantener MFCCs
+        layers.Dropout(0.2),
+        layers.Conv2D(64, (3, 3), activation='leaky_relu', padding='same', input_shape=input_shape),
+        layers.MaxPooling2D((1, 2)), # Reducimos solo la dimensión temporal para mantener MFCCs
         layers.Dropout(0.2),
 
-        layers.SeparableConv2D(256, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same'),
-        layers.MaxPooling2D((2, 2)),
-        layers.Dropout(0.2),
+        # --- PREPARACIÓN PARA RNN ---
+        # Necesitamos pasar de 4D (Batch, F, T, C) a 3D (Batch, T, Features)
+        # Reshape dinámico basado en lo que salga de la CNN
+        layers.Reshape((-1, 64 * 13)), # Colapsamos frecuencias y canales en un vector por paso de tiempo
 
-        # Primera capa: Convolución estándar para captar rasgos básicos
-        layers.SeparableConv2D(512, (2, 2), activation='leaky_relu', padding='same'),
-        layers.Dropout(0.4),
-
-
-        # Aplanar y Clasificar
-        layers.Flatten(),
-        layers.Dense(256, activation='leaky_relu'),
+        # --- BLOQUE RECURRENTE (Memoria temporal) ---
+        layers.GRU(64, return_sequences=False),
         layers.Dropout(0.3),
-        layers.Dense(64, activation='leaky_relu'),
-        layers.Dropout(0.3),
-        layers.Dense(num_classes, activation='softmax') # Probabilidad por clase
+
+        # --- CLASIFICADOR ---
+        layers.Dense(128, activation='leaky_relu'),
+        layers.Dense(num_classes, activation='softmax')
     ])
     
-    model.compile(optimizer='adam',
-                  loss='sparse_categorical_crossentropy',
+    model.compile(optimizer='adam', 
+                  loss='sparse_categorical_crossentropy', 
                   metrics=['accuracy'])
     return model
 
