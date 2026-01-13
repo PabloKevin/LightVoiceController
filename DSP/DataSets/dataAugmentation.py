@@ -7,9 +7,9 @@ from joblib import Parallel, delayed
 
 # --- Configuración ---
 FS = 12000  # Tu frecuencia de 12kHz
-INPUT_DIR = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet"
-OUTPUT_DIR = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented"
-AUGMENTATIONS_PER_FILE = 10  # Cuántas variaciones crear por cada audio original
+INPUT_DIR = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TrainSet"
+OUTPUT_DIR = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TrainSet_Augmented"
+AUGMENTATIONS_PER_FILE = 20  # Cuántas variaciones crear por cada audio original
 
 def load_wav(path):
     fs, data = wavfile.read(path)
@@ -25,7 +25,7 @@ def save_wav(path, data, fs):
 
 # --- Funciones de Aumento ---
 
-def change_speed(data, fs, rate_range=(0.85, 1.15)):
+def change_speed(data, fs, rate_range=(0.80, 1.20)):
     rate = np.random.uniform(*rate_range)
     input_length = len(data)
     # Interpolación para cambiar velocidad sin cambiar el tono drásticamente
@@ -42,13 +42,13 @@ def add_noise(data, noise_level=0.005):
     noise = np.random.randn(len(data))
     return data + noise_level * noise * np.max(np.abs(data))
 
-def shift_time(data, max_shift_ms=150):
+def shift_time(data, max_shift_ms=250):
     # Desplazar el audio circularmente para simular desfase en el inicio
     shift_samples = int((max_shift_ms / 1000) * FS)
     shift = np.random.randint(-shift_samples, shift_samples)
     return np.roll(data, shift)
 
-def change_volume(data, factor_range=(0.6, 1.4)):
+def change_volume(data, factor_range=(0.5, 1.5)):
     return data * np.random.uniform(*factor_range)
 
 # --- Proceso Principal ---
@@ -57,7 +57,7 @@ def process_single_file(file_path, output_subfolder):
     filename = Path(file_path).stem
     data = load_wav(file_path)
     
-    for i in range(AUGMENTATIONS_PER_FILE):
+    for i in range(10, 10 + AUGMENTATIONS_PER_FILE):
         # Aplicar cadena de aumentos aleatorios
         aug_data = change_speed(data, FS)
         aug_data = shift_time(aug_data)
