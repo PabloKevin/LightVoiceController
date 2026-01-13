@@ -1,0 +1,26 @@
+{
+    "CLASS_MAP": {
+        "ambiente": 0,
+        "apagarLuz": 1,
+        "prenderLuz": 2,
+        "luzBaja": 3,
+        "luzMedia": 4,
+        "luzAlta": 5,
+        "luzCozy": 6,
+        "luzDeDia": 7,
+        "luzFocus": 8,
+        "luzCalida": 9
+    },
+    "INDEX_TO_CLASS": {
+        "0": "ambiente",
+        "1": "apagarLuz",
+        "2": "prenderLuz",
+        "3": "luzBaja",
+        "4": "luzMedia",
+        "5": "luzAlta",
+        "6": "luzCozy",
+        "7": "luzDeDia",
+        "8": "luzFocus",
+        "9": "luzCalida"
+    }
+}
