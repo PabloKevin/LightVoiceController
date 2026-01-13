@@ -5,7 +5,7 @@ from tqdm import tqdm # Para ver la barra de progreso
 from AudioProcessing import process_audio_wav
 
 # --- Configuración ---
-DATA_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TrainSet_Augmented" # Carpeta con todos los .wav
+DATA_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented" # Carpeta con todos los .wav
 FS = 12000                      # Tu frecuencia de 12kHz
 N_MFCC = 13                     # Número de coeficientes (ideal para ESP32)
 MAX_LEN = 64                    # Longitud temporal fija 
@@ -58,8 +58,8 @@ def prepare_dataset():
     y = np.array(y)
 
     # 3. Guardar en disco
-    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/X_train.npy", X)
-    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/y_train.npy", y)
+    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/X_test.npy", X)
+    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/y_test.npy", y)
     
     print(f"\n¡Dataset listo!")
     print(f"Forma de X (Muestras, Coeficientes, Tiempo): {X.shape}")
