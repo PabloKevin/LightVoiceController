@@ -31,6 +31,36 @@ def extract_features(file_path):
     except Exception as e:
         print(f"Error procesando {file_path}: {e}")
         return None
+    
+def extract_fft_features(file_path, n_fft=256, hop_length=128, target_frames=64):
+    """
+    Carga un audio y calcula la magnitud de la STFT (FFT en el tiempo).
+    n_fft: Tamaño de la ventana (determina la resolución en frecuencia).
+    hop_length: Avance entre ventanas (determina la resolución en tiempo).
+    """
+    # 1. Cargar audio (sr=None mantiene la tasa de muestreo original, ej. 16k)
+    audio, sr = librosa.load(file_path, sr=None)
+
+    # Ajustar n_fft para garantizar 128 bins de frecuencia
+    n_fft = 256 if n_fft % 2 == 0 else 255  # Asegurar que n_fft sea par
+
+    # 2. Calcular la STFT
+    stft = librosa.stft(audio, n_fft=n_fft, hop_length=hop_length)
+
+    # 3. Obtener la magnitud (valor absoluto)
+    magnitude = np.abs(stft)
+
+    # 4. Convertir a escala logarítmica (Decibelios)
+    log_spectrogram = librosa.amplitude_to_db(magnitude, ref=np.max)
+
+    # 5. Ajustar dimensiones (Padding o Truncate) para tener siempre 'target_frames'
+    if log_spectrogram.shape[1] > target_frames:
+        log_spectrogram = log_spectrogram[:128, :target_frames]  # Truncar a 128 bins
+    else:
+        pad_width = target_frames - log_spectrogram.shape[1]
+        log_spectrogram = np.pad(log_spectrogram[:128, :], ((0, 0), (0, pad_width)), mode='constant')
+
+    return log_spectrogram
 
 def prepare_dataset():
     X = []
@@ -48,7 +78,7 @@ def prepare_dataset():
         
         # 2. Obtener características
         full_path = os.path.join(DATA_PATH, filename)
-        features = extract_features(full_path)
+        features = extract_fft_features(full_path)
         
         if features is not None:
             X.append(features)

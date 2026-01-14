@@ -108,6 +108,7 @@ def plot_frequency_spectrum(data, fs, title="Espectro de Frecuencia"):
     
     plt.show()
 
+
 def gaussian_blur(data, window_size=7):
     # Creamos una ventana de suavizado suave (tipo campana)
     window = np.hamming(window_size)

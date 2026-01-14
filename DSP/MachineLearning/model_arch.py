@@ -4,22 +4,29 @@ from tensorflow.keras.models import load_model
 def build_model(input_shape, num_classes):
     model = models.Sequential([
         # Primera capa: Convolución estándar para captar rasgos básicos
-        layers.SeparableConv2D(64, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same'),
+        layers.BatchNormalization(input_shape=input_shape),
+        layers.Dropout(0.05),
+        layers.SeparableConv2D(64, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same',strides=(2,1)),
         layers.AvgPool2D((2, 2)),
         layers.Dropout(0.2),
 
-        layers.SeparableConv2D(128, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same'),
+        layers.SeparableConv2D(128, (3, 3), activation='leaky_relu', padding='same'),
         layers.MaxPooling2D((2, 2)),
         layers.Dropout(0.5),
 
         # Primera capa: Convolución estándar para captar rasgos básicos
-        layers.SeparableConv2D(256, (2, 2), activation='leaky_relu', padding='same'),
+        layers.SeparableConv2D(512, (2, 2), activation='leaky_relu', padding='same'),
+        layers.MaxPooling2D((2, 2)),
         layers.Dropout(0.4),
 
 
         # Aplanar y Clasificar
         layers.Flatten(),
-        layers.Dense(512, activation='leaky_relu'),
+        layers.Dense(128, activation='leaky_relu'),
+        layers.Dropout(0.3),
+        layers.Dense(64, activation='leaky_relu'),
+        layers.Dropout(0.3),
+        layers.Dense(32, activation='leaky_relu'),
         layers.Dropout(0.3),
         layers.Dense(num_classes, activation='softmax') # Probabilidad por clase
     ])

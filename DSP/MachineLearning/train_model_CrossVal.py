@@ -88,7 +88,7 @@ if __name__ == "__main__":
     K = 4
     folds = get_kfold_indices(X, k=K)
     all_histories = []
-    input_shape = (13, 64, 1)
+    input_shape = (128, 64, 1)
 
     print(f"\n🔄 Iniciando {K}-Fold Cross Validation...")
 
@@ -103,11 +103,11 @@ if __name__ == "__main__":
         X_train_fold, X_val_fold = X[train_idx], X[val_idx]
         y_train_fold, y_val_fold = y_encoded[train_idx], y_encoded[val_idx]
 
-        mean, std = np.mean(X_train_fold), np.std(X_train_fold)
-        X_train_fold = (X_train_fold - mean) / (std + 1e-8)
-        X_train_fold = X_train_fold.reshape(X_train_fold.shape[0], 13, 64, 1)
-        X_val_fold = (X_val_fold - mean) / (std + 1e-8)
-        X_val_fold = X_val_fold.reshape(X_val_fold.shape[0], 13, 64, 1)
+        #mean, std = np.mean(X_train_fold), np.std(X_train_fold)
+        #X_train_fold = (X_train_fold - mean) / (std + 1e-8)
+        #X_train_fold = X_train_fold.reshape(X_train_fold.shape[0], 128, 64, 1)
+        #X_val_fold = (X_val_fold - mean) / (std + 1e-8)
+        #X_val_fold = X_val_fold.reshape(X_val_fold.shape[0], 128, 64, 1)
 
         # Re-construir el modelo desde cero para cada fold (evita contaminación)
         model = build_model(input_shape, num_classes)
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         history = model.fit(
             X_train_fold, y_train_fold,
             epochs=250, # Bajé a 100 porque con CV el tiempo total se multiplica por K
-            batch_size=64,
+            batch_size=128,
             validation_data=(X_val_fold, y_val_fold),
             callbacks=[
                 tf.keras.callbacks.EarlyStopping(patience=25, restore_best_weights=True),

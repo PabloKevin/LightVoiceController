@@ -118,6 +118,9 @@ if __name__ == "__main__":
     X = np.load(path + "X_test.npy")  # Forma esperada: (N, 13, 64)
     y = np.load(path + "y_test.npy")
 
+    # Update input shape for FFT features
+    X = X.reshape(X.shape[0], 128, 64, 1)
+
     # Cargar el modelo guardado
     len_models = len(os.listdir(os.path.join(BASE_DIR, "model_weights")))
     #model_path = os.path.join(BASE_DIR, "model_weights", f"voiceModel_{len_models-1}.keras")
