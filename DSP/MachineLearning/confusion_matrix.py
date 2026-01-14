@@ -121,7 +121,7 @@ if __name__ == "__main__":
     # Cargar el modelo guardado
     len_models = len(os.listdir(os.path.join(BASE_DIR, "model_weights")))
     #model_path = os.path.join(BASE_DIR, "model_weights", f"voiceModel_{len_models-1}.keras")
-    model_path = os.path.join(BASE_DIR, "model_weights", f"voiceModel_FullTrain.keras")
+    model_path = os.path.join(BASE_DIR, "model_weights", f"voiceModel_BEST.keras")
     model = voiceModelNN(model_path)
 
     plot_confusion_matrix(model, X, y)

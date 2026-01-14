@@ -3,38 +3,29 @@ from tensorflow.keras.models import load_model
 
 def build_model(input_shape, num_classes):
     model = models.Sequential([
-        # --- BLOQUE CONVOLUCIONAL (Extractor) ---
-        # input_shape: (13, 64, 1) -> (MFCCs, Tiempo, Canal)
-        layers.BatchNormalization(input_shape=input_shape),
-        layers.Dropout(0.05),
-        layers.Conv2D(16, (3, 3), activation='leaky_relu', padding='same', input_shape=input_shape, strides=1),
-        layers.MaxPooling2D((2, 1)), # Reducimos solo la dimensión temporal para mantener MFCCs
-        layers.Dropout(0.3),
-        layers.Conv2D(32, (3, 3), activation='leaky_relu', padding='same', strides=1),
-        layers.MaxPooling2D((2, 2)), # Reducimos solo la dimensión temporal para mantener MFCCs
-        layers.Dropout(0.4),
-        layers.Conv2D(64, (3, 3), activation='leaky_relu', padding='same', strides=1),
-        layers.MaxPooling2D((3, 1)), # Reducimos solo la dimensión temporal para mantener MFCCs
+        # Primera capa: Convolución estándar para captar rasgos básicos
+        layers.SeparableConv2D(64, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same'),
+        layers.AvgPool2D((2, 2)),
+        layers.Dropout(0.2),
+
+        layers.SeparableConv2D(128, (3, 3), activation='leaky_relu', input_shape=input_shape, padding='same'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.5),
+
+        # Primera capa: Convolución estándar para captar rasgos básicos
+        layers.SeparableConv2D(256, (2, 2), activation='leaky_relu', padding='same'),
         layers.Dropout(0.4),
 
-        # --- PREPARACIÓN PARA RNN ---
-        # Necesitamos pasar de 4D (Batch, F, T, C) a 3D (Batch, T, Features)
-        # --- ELIMINAR DIMENSIÓN 0 ---
-       
-        layers.Reshape((32, 64)),
 
+        # Aplanar y Clasificar
         layers.Flatten(),
-        layers.Dense(256, activation='leaky_relu'),
-        layers.Dropout(0.35),
-
-        # --- CLASIFICADOR ---
-        layers.Dense(64, activation='leaky_relu'),
-        layers.Dropout(0.4),
-        layers.Dense(num_classes, activation='softmax')
+        layers.Dense(512, activation='leaky_relu'),
+        layers.Dropout(0.3),
+        layers.Dense(num_classes, activation='softmax') # Probabilidad por clase
     ])
     
-    model.compile(optimizer='adam', 
-                  loss='sparse_categorical_crossentropy', 
+    model.compile(optimizer='adam',
+                  loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
     return model
 
