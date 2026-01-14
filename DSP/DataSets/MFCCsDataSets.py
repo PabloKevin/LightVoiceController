@@ -5,7 +5,8 @@ from tqdm import tqdm # Para ver la barra de progreso
 from AudioProcessing import process_audio_wav
 
 # --- Configuración ---
-DATA_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TrainSet_Augmented" # Carpeta con todos los .wav
+dataset = "Test" # Cambia a "Train" o "Test" según el conjunto que quieras procesar
+DATA_PATH = f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_{dataset}Set_Augmented" # Carpeta con todos los .wav
 FS = 12000                      # Tu frecuencia de 12kHz
 N_MFCC = 13                     # Número de coeficientes (ideal para ESP32)
 MAX_LEN = 64                    # Longitud temporal fija 
@@ -36,7 +37,7 @@ def prepare_dataset():
     y = []
     
     # Listar todos los archivos wav
-    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav')]
+    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav') and f.startswith(("ambiente", "apagarLuz", "prenderLuz", "luzBaja", "luzMedia", "luzAlta"))]
     
     print(f"Iniciando extracción de MFCCs para {len(files)} archivos...")
 
@@ -58,8 +59,8 @@ def prepare_dataset():
     y = np.array(y)
 
     # 3. Guardar en disco
-    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/X_train.npy", X)
-    np.save("/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/y_train.npy", y)
+    np.save(f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/X_{dataset.lower()}.npy", X)
+    np.save(f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/y_{dataset.lower()}.npy", y)
     
     print(f"\n¡Dataset listo!")
     print(f"Forma de X (Muestras, Coeficientes, Tiempo): {X.shape}")

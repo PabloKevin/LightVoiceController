@@ -44,13 +44,13 @@ if __name__ == "__main__":
     
     # Entrenar por un número fijo de épocas 
     # (Usa el número de épocas donde viste que el modelo convergía en tus pruebas previas)
-    EPOCHS = 600 
+    EPOCHS = 300 
     
     print(f"\n🚀 Entrenando durante {EPOCHS} épocas...")
     history = model.fit(
         X_scaled, y_encoded,
         epochs=EPOCHS,
-        batch_size=64,
+        batch_size=128,
         verbose=1,
         # Callback para reducir el LR si la pérdida de entrenamiento se estanca
         callbacks=[
