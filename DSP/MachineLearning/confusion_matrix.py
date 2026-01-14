@@ -6,7 +6,6 @@ import os
 from tensorflow.keras.models import load_model
 from model_arch import voiceModelNN
 
-
 def plot_confusion_matrix(model, X_test, y_test):
     y_pred = model.predict(X_test)
     y_pred_classes = np.argmax(y_pred, axis=1)

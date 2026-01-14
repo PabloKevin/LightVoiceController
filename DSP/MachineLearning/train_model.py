@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     # Entrenar por un número fijo de épocas 
     # (Usa el número de épocas donde viste que el modelo convergía en tus pruebas previas)
-    EPOCHS = 150 
+    EPOCHS = 600 
     
     print(f"\n🚀 Entrenando durante {EPOCHS} épocas...")
     history = model.fit(
@@ -54,7 +54,7 @@ if __name__ == "__main__":
         verbose=1,
         # Callback para reducir el LR si la pérdida de entrenamiento se estanca
         callbacks=[
-            tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.5, patience=17, verbose=1)
+            tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.5, patience=13, verbose=1)
         ]
     )
 
