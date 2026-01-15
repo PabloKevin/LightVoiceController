@@ -5,7 +5,7 @@ from tqdm import tqdm # Para ver la barra de progreso
 from AudioProcessing import process_audio_wav
 
 # --- Configuración ---
-dataset = "Test" # Cambia a "Train" o "Test" según el conjunto que quieras procesar
+dataset = "Train" # Cambia a "Train" o "Test" según el conjunto que quieras procesar
 DATA_PATH = f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_{dataset}Set_Augmented" # Carpeta con todos los .wav
 FS = 12000                      # Tu frecuencia de 12kHz
 N_MFCC = 13                     # Número de coeficientes (ideal para ESP32)
@@ -67,7 +67,7 @@ def prepare_dataset():
     y = []
     
     # Listar todos los archivos wav
-    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav') and f.startswith(("ambiente", "apagarLuz", "prenderLuz", "luzBaja", "luzMedia", "luzAlta"))]
+    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav') and f.startswith(("ambiente", "apagarLuz", "prenderLuz"))]
     
     print(f"Iniciando extracción de MFCCs para {len(files)} archivos...")
 
@@ -78,7 +78,7 @@ def prepare_dataset():
         
         # 2. Obtener características
         full_path = os.path.join(DATA_PATH, filename)
-        features = extract_fft_features(full_path)
+        features = extract_features(full_path)
         
         if features is not None:
             X.append(features)

@@ -88,7 +88,7 @@ if __name__ == "__main__":
     K = 4
     folds = get_kfold_indices(X, k=K)
     all_histories = []
-    input_shape = (128, 64, 1)
+    input_shape = (13, 64, 1)
 
     print(f"\n🔄 Iniciando {K}-Fold Cross Validation...")
 

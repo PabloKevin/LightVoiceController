@@ -32,23 +32,23 @@ if __name__ == "__main__":
     global_std = np.std(X)
     
     X_scaled = (X - global_mean) / (global_std + 1e-8)
-    X_scaled = X_scaled.reshape(X_scaled.shape[0], 128, 64, 1)
+    X_scaled = X_scaled.reshape(X_scaled.shape[0], 13, 64, 1)
 
     print(f"--- Entrenamiento con Set Completo ---")
     print(f"Muestras totales: {X_scaled.shape[0]}")
     print(f"Estadísticas para el ESP32: Mean: {global_mean:.6f}, Std: {global_std:.6f}")
 
     # --- 3. Entrenamiento ---
-    input_shape = (128, 64, 1)
+    input_shape = (13, 64, 1)
     model = build_model(input_shape, num_classes)
     
     # Entrenar por un número fijo de épocas 
     # (Usa el número de épocas donde viste que el modelo convergía en tus pruebas previas)
-    EPOCHS = 150 
+    EPOCHS = 100 
     
     print(f"\n🚀 Entrenando durante {EPOCHS} épocas...")
     history = model.fit(
-        X_scaled, y_encoded,
+        X, y_encoded,
         epochs=EPOCHS,
         batch_size=128,
         verbose=1,

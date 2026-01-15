@@ -2,18 +2,12 @@
     "CLASS_MAP": {
         "ambiente": 0,
         "apagarLuz": 1,
-        "prenderLuz": 2,
-        "luzBaja": 3,
-        "luzMedia": 4,
-        "luzAlta": 5
+        "prenderLuz": 2
     },
     "INDEX_TO_CLASS": {
         "0": "ambiente",
         "1": "apagarLuz",
-        "2": "prenderLuz",
-        "3": "luzBaja",
-        "4": "luzMedia",
-        "5": "luzAlta"
+        "2": "prenderLuz"
     },
 
     "CLASS_MAP_FULL": {

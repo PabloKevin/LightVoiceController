@@ -236,18 +236,18 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
     data = data - np.mean(data)  # Eliminar offset DC
     data = data[len(data)//15:]
 
-    data = audio_blur(data, window_size = 15)
-    data = gaussian_blur(data, window_size = 25)
-    data = medfilt(data, kernel_size=21) #
+    data = audio_blur(data, window_size = 13)
+    data = gaussian_blur(data, window_size = 15)
+    data = medfilt(data, kernel_size=11) #
 
     # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
     data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
     data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
 
     #data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
-    data_filtrada = kill_peaks(data_filtrada, min_data=0.7, threshold=50.0, trials=5)
-    data_filtrada = simple_spectral_subtraction(data_filtrada, noise_reduction_factor=1.5)
-    data_filtrada = TrimAudio(data_filtrada, end_duration=1.2, fs=fs)
+    data_filtrada = kill_peaks(data_filtrada, min_data=0.6, windows=5, threshold=60.0, trials=5)
+    data_filtrada = simple_spectral_subtraction(data_filtrada, noise_reduction_factor=1.3)
+    data_filtrada = TrimAudio(data_filtrada, end_duration=1.4, fs=fs)
 
 
     if plot:
