@@ -39,7 +39,7 @@ def extract_fft_features(file_path, n_fft=256, hop_length=128, target_frames=64)
     hop_length: Avance entre ventanas (determina la resolución en tiempo).
     """
     # 1. Cargar audio (sr=None mantiene la tasa de muestreo original, ej. 16k)
-    audio, sr = librosa.load(file_path, sr=None)
+    audio, sr = process_audio_wav(file_path)
 
     # Ajustar n_fft para garantizar 128 bins de frecuencia
     n_fft = 256 if n_fft % 2 == 0 else 255  # Asegurar que n_fft sea par

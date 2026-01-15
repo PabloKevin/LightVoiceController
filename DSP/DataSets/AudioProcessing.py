@@ -161,6 +161,72 @@ def plot_mfcc(wav_file, n_mfcc=13, fs=12000):
     plt.tight_layout()
     plt.show()
 
+def simple_spectral_subtraction(audio, noise_reduction_factor=2.0):
+    # 1. STFT
+    stft = librosa.stft(audio)
+    magnitude, phase = np.abs(stft), np.angle(stft)
+    
+    # 2. Estimar ruido (asumimos que los primeros frames son silencio/ruido)
+    noise_estimation = np.mean(np.concatenate([magnitude[:, :4],magnitude[:,-4:]], axis=1), axis=1, keepdims=True)
+    
+    # 3. Restar magnitud
+    magnitude_clean = magnitude - noise_reduction_factor * noise_estimation
+    magnitude_clean = np.maximum(magnitude_clean, 0.01 * magnitude) # Spectral floor
+    
+    # 4. Reconstruir (solo para verificar, luego pasarías la magnitud a MFCC)
+    stft_clean = magnitude_clean * np.exp(1j * phase)
+    return librosa.istft(stft_clean)
+
+def kill_peaks(audio, windows=8, min_data=0.8, threshold=50.0, trials=10):
+    samplesW = len(audio) // windows
+    idxs = np.arange(0, len(audio), samplesW)
+    frames = [audio[i:i+samplesW] for i in idxs if i+samplesW <= len(audio)]
+    
+    trial = 0
+    while True:
+        processed_audio = np.array([])
+        for frame in frames:
+            frame2 = np.power(frame, 2)
+            if np.max(frame2) > threshold * np.mean(frame2):
+                frame = np.zeros(len(frame))
+            else:
+                processed_audio = np.concatenate([processed_audio, frame])
+        
+        if len(processed_audio) >= len(audio)*min_data:
+            break
+        elif trial>trials:
+            print("Trial:", trial)
+            processed_audio = audio
+            break
+        else:
+            threshold *= 0.7
+            trial += 1
+    
+    return processed_audio
+
+def TrimAudio(audio, end_duration=1.2, fs=16000):
+    end_samples = int(end_duration * fs)
+    diff_samples = end_samples - len(audio)
+    if diff_samples < 0: # Hay que recortar
+        # Calcular la energía del audio
+        energy = np.square(audio)
+        energy_cumsum = np.cumsum(energy)
+        total_energy = energy_cumsum[-1]
+
+        # Encontrar el índice del centro de energía
+        center_index = np.searchsorted(energy_cumsum, total_energy / 2)
+
+        # Calcular los límites para centrar el audio
+        start_index = max(0, center_index - end_samples // 2)
+        end_index = start_index + end_samples
+        return audio[start_index : end_index]
+    elif diff_samples > 0: # Hay que rellenar
+        start_padding = np.zeros(diff_samples//2)
+        end_padding = np.zeros(diff_samples//2 + diff_samples%2)
+        return np.concatenate([start_padding, audio, end_padding])
+    else:
+        return audio
+
 
 def process_audio_wav(wav_path, output_path=None, plot=False):
     wavFile = wav_path
@@ -170,15 +236,19 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
     data = data - np.mean(data)  # Eliminar offset DC
     data = data[len(data)//15:]
 
-    data = audio_blur(data, window_size = 5)
-    data = gaussian_blur(data, window_size = 13)
-    data = medfilt(data, kernel_size=59) #
+    data = audio_blur(data, window_size = 15)
+    data = gaussian_blur(data, window_size = 25)
+    data = medfilt(data, kernel_size=21) #
 
     # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
     data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
     data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
 
-    data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
+    #data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
+    data_filtrada = kill_peaks(data_filtrada, min_data=0.7, threshold=50.0, trials=5)
+    data_filtrada = simple_spectral_subtraction(data_filtrada, noise_reduction_factor=1.5)
+    data_filtrada = TrimAudio(data_filtrada, end_duration=1.2, fs=fs)
+
 
     if plot:
         #data_dB = 20 * np.log10(np.abs(data_filtrada))
@@ -195,6 +265,6 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
     return data_filtrada, fs
 
 if __name__ == "__main__":
-    wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/luzAlta_7_aug_2.wav"
+    wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/prenderLuz_9_aug_4.wav"
     output_path = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/ProcessedAudio/"
     process_audio_wav(wav_file, output_path, plot=True)
