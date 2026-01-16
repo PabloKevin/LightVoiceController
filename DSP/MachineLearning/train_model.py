@@ -26,17 +26,6 @@ if __name__ == "__main__":
     y_encoded = np.array([CLASS_MAP[label] for label in y])
     num_classes = len(CLASS_MAP)
 
-    # --- 2. Normalización Global y Reshape ---
-    # Calculamos media y desviación de TODO el set
-    global_mean = np.mean(X)
-    global_std = np.std(X)
-    
-    X_scaled = (X - global_mean) / (global_std + 1e-8)
-    X_scaled = X_scaled.reshape(X_scaled.shape[0], 13, 64, 1)
-
-    print(f"--- Entrenamiento con Set Completo ---")
-    print(f"Muestras totales: {X_scaled.shape[0]}")
-    print(f"Estadísticas para el ESP32: Mean: {global_mean:.6f}, Std: {global_std:.6f}")
 
     # --- 3. Entrenamiento ---
     input_shape = (13, 64, 1)
