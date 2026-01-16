@@ -6,7 +6,7 @@
 
 // Definiciones globales de audio
 #define SAMPLE_RATE 12000
-#define RECORD_TIME 2
+#define RECORD_TIME 1.0
 #define TOTAL_SAMPLES (SAMPLE_RATE * RECORD_TIME)
 #define N_MFCC 13
 #define MAX_TIME_STEPS 64
