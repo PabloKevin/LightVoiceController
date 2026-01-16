@@ -1,63 +1,48 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
-#include <cstdlib>
 #include "credentials.h"
 #include "audio_processing.h"
 #include "mfcc.h"
 #include "tflite_inference.h"
+#include "model_data.h"  // Modelo TFLite embebido
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_system.h"
 
-// --- Configuration ---
+// --- Configuración de Pines ---
 #define MICROPHONE_PIN 34
 #define POTENTIOMETER_PIN 35
 
-#define SAMPLE_RATE 12000
-#define RECORD_TIME 2
-#define TOTAL_SAMPLES (SAMPLE_RATE * RECORD_TIME)
-
-// --- Audio Buffers ---
-// Double buffering for audio capture (one for recording, one for processing)
-// Using pointers to allocate in PSRAM to save DRAM
-float* audioBuffer1 = nullptr;
-float* audioBuffer2 = nullptr;
-float* currentRecordingBuffer = nullptr;
-float* processedAudioBuffer = nullptr;
-
-// --- Processing Buffers ---
-float* processed_audio = nullptr;
-float mfcc_features[N_MFCC * MAX_TIME_STEPS];  // (13 x 64) - small enough for DRAM
+// --- Buffers de Audio y Procesamiento ---
+// TOTAL_SAMPLES, N_MFCC y MAX_TIME_STEPS se definen en audio_processing.h
+float audioBuffer[TOTAL_SAMPLES]; // Un solo buffer para ahorrar RAM
 float mfcc_normalized[N_MFCC * MAX_TIME_STEPS];
 
-// --- Global Objects ---
+// --- Objetos Globales ---
 AudioProcessor audioProcessor;
 MFCCExtractor mfccExtractor;
 VoiceModelInference voiceModel;
 
-// --- WiFi and Control ---
+// --- WiFi y Control de Luces WiZ ---
 WiFiUDP udp;
 char bedroomLightIP[16] = "";
 const int wizPort = 38899;
 int currentBrightness = 50;
 int currentTemp = 4100;
 
-// --- FreeRTOS Queues and Synchronization ---
-QueueHandle_t audioReadyQueue;  // Signal when audio is ready for processing
-SemaphoreHandle_t modelReadySemaphore;  // Protect model prediction access
+// --- Colas y Semáforos FreeRTOS ---
+QueueHandle_t audioReadyQueue;  
+SemaphoreHandle_t modelReadySemaphore;  
 
-// --- Task Handles ---
+// --- Handles de Tareas ---
 TaskHandle_t wifiTaskHandle = nullptr;
 TaskHandle_t mlTaskHandle = nullptr;
 
-bool isRecording = false;
 bool modelReady = false;
-volatile int lastPrediction = -1;
-volatile float lastConfidence = 0.0f;
 
-// --- Forward Declarations ---
+// --- Prototipos de Funciones ---
 void wifiAndAudioTask(void* pvParameters);
 void mlInferenceTask(void* pvParameters);
 bool findLightIP(const char* targetMAC, char* targetIP);
@@ -67,16 +52,14 @@ void turnOff();
 void setWizLight(int brightness, int kelvin, int sceneID, char* targetIP);
 void Pot2Light();
 void recordAudio();
-void playBackSerial();
 void handlePrediction(int classId, float confidence);
 
 // ============================================================================
-// WiFi and Light Control Functions (unchanged from original)
+// Funciones de Control WiZ
 // ============================================================================
 
 bool findLightIP(const char* targetMAC, char* targetIP) {
-    Serial.println("Searching for WiZ light...");
-    
+    Serial.println("Buscando lámpara WiZ...");
     IPAddress broadcastIP(255, 255, 255, 255);
     const char* discoverCmd = "{\"method\":\"getSystemConfig\",\"params\":{}}";
     
@@ -91,16 +74,14 @@ bool findLightIP(const char* targetMAC, char* targetIP) {
             char incomingPacket[512];
             int len = udp.read(incomingPacket, 511);
             incomingPacket[len] = '\0';
-
             JsonDocument doc;
             DeserializationError error = deserializeJson(doc, incomingPacket);
-            
             if (!error) {
                 const char* mac = doc["result"]["mac"];
                 if (mac && strcasecmp(mac, targetMAC) == 0) {
                     strncpy(targetIP, udp.remoteIP().toString().c_str(), 15);
                     targetIP[15] = '\0';
-                    Serial.printf("Found Light! IP: %s\n", targetIP);
+                    Serial.printf("¡Lámpara encontrada! IP: %s\n", targetIP);
                     return true;
                 }
             }
@@ -110,272 +91,140 @@ bool findLightIP(const char* targetMAC, char* targetIP) {
 }
 
 void sendWizCommand(const char* jsonCommand, char* targetIP) {
-    if (targetIP[0] == '\0') {
-        while (!findLightIP(bedroom_light_mac, targetIP)) {
-            vTaskDelay(3000 / portTICK_PERIOD_MS);
-        }
-    }
+    if (targetIP[0] == '\0') return;
     udp.beginPacket(targetIP, wizPort);
     udp.print(jsonCommand);
     udp.endPacket();
-    Serial.print("Sent: ");
-    Serial.println(jsonCommand);
 }
 
 void turnOn() {
-    const char* cmd = "{\"method\":\"setPilot\",\"params\":{\"state\":true}}";
-    sendWizCommand(cmd, bedroomLightIP);
+    sendWizCommand("{\"method\":\"setPilot\",\"params\":{\"state\":true}}", bedroomLightIP);
 }
 
 void turnOff() {
-    const char* cmd = "{\"method\":\"setPilot\",\"params\":{\"state\":false}}";
-    sendWizCommand(cmd, bedroomLightIP);
+    sendWizCommand("{\"method\":\"setPilot\",\"params\":{\"state\":false}}", bedroomLightIP);
 }
 
 void setWizLight(int brightness, int kelvin, int sceneID, char* targetIP) {
-    if (targetIP[0] == '\0') {
-        while (!findLightIP(bedroom_light_mac, targetIP)) {
-            vTaskDelay(3000 / portTICK_PERIOD_MS);
-        }
-    }
-    
+    if (targetIP[0] == '\0') return;
     brightness = constrain(brightness, 10, 100);
     kelvin = constrain(kelvin, 2700, 6500);
-
     JsonDocument doc;
     doc["method"] = "setPilot";
-    
     JsonObject params = doc["params"].to<JsonObject>();
     params["state"] = true;
     params["dimming"] = brightness;
     params["temp"] = kelvin;
     params["sceneID"] = sceneID;
-
     char buffer[128];
     serializeJson(doc, buffer);
-
-    udp.beginPacket(targetIP, wizPort);
-    udp.print(buffer);
-    udp.endPacket();
-
-    Serial.printf("Sent: Brightness %d%%, Temp %dK\n", brightness, kelvin);
+    sendWizCommand(buffer, targetIP);
 }
 
 void Pot2Light() {
-    int off_threshold = 120;
-    int minTemp_threshold = 600;
     static int lastPotValue = 0;
-
     int newPotValue = analogRead(POTENTIOMETER_PIN);
-    if (abs(newPotValue - lastPotValue) < 82) {
-        return;
-    }
+    if (abs(newPotValue - lastPotValue) < 100) return;
     lastPotValue = newPotValue;
 
-    if (newPotValue < off_threshold) {
+    if (newPotValue < 150) {
         turnOff();
-        currentBrightness = 0;
-        return;
-    } else if (newPotValue < minTemp_threshold) {
-        setWizLight(10, 2700, 6, bedroomLightIP);
-        currentBrightness = 10;
-        currentTemp = 2700;
-        return;
+    } else {
+        currentBrightness = map(newPotValue, 150, 4095, 10, 100);
+        currentTemp = map(newPotValue, 150, 4095, 2700, 6500);
+        setWizLight(currentBrightness, currentTemp, 6, bedroomLightIP);
     }
-
-    currentBrightness = map(newPotValue, minTemp_threshold, 4095, 10, 100);
-    currentTemp = map(newPotValue, minTemp_threshold, 4095, 2700, 6500);
-    setWizLight(currentBrightness, currentTemp, 6, bedroomLightIP);
 }
 
 // ============================================================================
-// Audio Recording Functions
+// Grabación de Audio
 // ============================================================================
 
 void recordAudio() {
-    Serial.println(">>> Starting audio recording (2 sec)...");
+    Serial.println(">>> Grabando (2 seg)...");
     digitalWrite(LED_BUILTIN, HIGH);
-    
     unsigned int sampleDelay = 1000000 / SAMPLE_RATE;
-    unsigned long startTime = millis();
-
     for (int i = 0; i < TOTAL_SAMPLES; i++) {
         unsigned long nextSampleTime = micros() + sampleDelay;
-        
-        // Read from ADC (12-bit: 0-4095)
         uint16_t adcValue = analogRead(MICROPHONE_PIN);
-        // Convert to float [-1, 1]
-        currentRecordingBuffer[i] = (adcValue / 2048.0f) - 1.0f;
-        
-        // Wait for next sample time
-        while (micros() < nextSampleTime) {
-            // Busy wait for precision
-        }
+        audioBuffer[i] = (adcValue / 2048.0f) - 1.0f;
+        while (micros() < nextSampleTime);
     }
-
-    Serial.printf(">>> Recording finished. Time: %lu ms\n", millis() - startTime);
     digitalWrite(LED_BUILTIN, LOW);
+    Serial.println(">>> Grabación finalizada.");
 }
-
-void playBackSerial() {
-    Serial.println("Sending audio data to monitor...");
-    for (int i = 0; i < TOTAL_SAMPLES; i++) {
-        Serial.println(currentRecordingBuffer[i]);
-    }
-}
-
-// ============================================================================
-// Voice Recognition and Light Control
-// ============================================================================
 
 void handlePrediction(int classId, float confidence) {
-    Serial.printf("Prediction: Class=%d, Confidence=%.2f%%\n", classId, confidence * 100);
-    Serial.printf("Class Name: %s\n", voiceModel.get_class_name(classId));
+    Serial.printf("Predicción: %s (Confianza: %.2f%%)\n", voiceModel.get_class_name(classId), confidence * 100);
     
-    // Store last prediction
-    lastPrediction = classId;
-    lastConfidence = confidence;
-    
-    // Only act if confidence is high enough
-    if (confidence < 0.6f) {
-        Serial.println("Confidence too low, ignoring prediction");
+    if (confidence < 0.75f) {
+        Serial.println("Confianza baja, ignorando...");
         return;
     }
-    
-    // Execute action based on prediction
-    switch (classId) {
-        case CLASS_AMBIENTE:
-            //Serial.println("Setting ambient lighting...");
-            //setWizLight(30, 4000, 6, bedroomLightIP);
-            break;
-            
-        case CLASS_APAGAR_LUZ:
-            Serial.println("Turning off light...");
-            turnOff();
-            break;
-            
-        case CLASS_PRENDER_LUZ:
-            Serial.println("Turning on light...");
-            turnOn();
-            break;
-            
-        default:
-            Serial.println("Unknown class");
-            break;
+
+    if (classId == CLASS_APAGAR_LUZ) {
+        Serial.println("Acción: Apagar Luz");
+        turnOff();
+    } else if (classId == CLASS_PRENDER_LUZ) {
+        Serial.println("Acción: Prender Luz");
+        turnOn();
+    } else if (classId == CLASS_AMBIENTE) {
+        Serial.println("Acción: Modo Ambiente");
+        setWizLight(30, 3000, 6, bedroomLightIP);
     }
 }
 
 // ============================================================================
-// FreeRTOS Task: WiFi and Audio (Core 0)
+// Tareas FreeRTOS
 // ============================================================================
 
 void wifiAndAudioTask(void* pvParameters) {
-    Serial.println("WiFi & Audio Task started on Core 0");
-    
-    // Initialize WiFi
     WiFi.begin(ssid, password);
-    int wifiAttempts = 0;
-    while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
+    while (WiFi.status() != WL_CONNECTED) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         Serial.print(".");
-        wifiAttempts++;
     }
-    
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi Connected!");
-        digitalWrite(LED_BUILTIN, HIGH);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        digitalWrite(LED_BUILTIN, LOW);
-    }
-    
-    // Initialize UDP
+    Serial.println("\nWiFi Conectado");
     udp.begin(wizPort);
     
-    // Find light IP
     while (!findLightIP(bedroom_light_mac, bedroomLightIP)) {
         vTaskDelay(3000 / portTICK_PERIOD_MS);
     }
-    
-    // Main loop
+
     while (1) {
-        // Check for serial commands
-        if (Serial.available() > 0) {
-            char c = Serial.read();
-            if (c == 'g') {
-                // Record audio
-                recordAudio();
-                
-                // Signal ML task that audio is ready
-                xQueueSend(audioReadyQueue, nullptr, portMAX_DELAY);
-                
-                // Optionally send to serial for debugging
-                // playBackSerial();
-            }
+        if (Serial.available() > 0 && Serial.read() == 'g') {
+            recordAudio();
+            xQueueSend(audioReadyQueue, nullptr, portMAX_DELAY);
         }
-        
-        // Update potentiometer-based light control
         Pot2Light();
-        
-        vTaskDelay(200 / portTICK_PERIOD_MS);
+        vTaskDelay(150 / portTICK_PERIOD_MS);
     }
 }
 
-// ============================================================================
-// FreeRTOS Task: ML Inference (Core 1)
-// ============================================================================
-
 void mlInferenceTask(void* pvParameters) {
-    Serial.println("ML Inference Task started on Core 1");
-    
-    // Wait until model is ready
-    while (!modelReady) {
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-    
-    Serial.println("Model ready, starting inference loop...");
-    
+    while (!modelReady) vTaskDelay(100 / portTICK_PERIOD_MS);
+    float mfcc_temp[N_MFCC * MAX_TIME_STEPS]; // Buffer temporal para extracción
+
     while (1) {
-        // Wait for audio to be ready (blocks until audio is received)
         if (xQueueReceive(audioReadyQueue, nullptr, portMAX_DELAY)) {
-            unsigned long startTime = millis();
+            unsigned long start = millis();
             
-            Serial.println("\n=== Processing Audio ===");
+            // 1. Pre-procesamiento de audio (Normalización, Filtros, Kill Peaks)
+            audioProcessor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
             
-            // 1. Preprocess audio
-            Serial.println("1. Preprocessing audio...");
-            audioProcessor.process_complete_pipeline(
-                currentRecordingBuffer, TOTAL_SAMPLES, processed_audio);
+            // 2. Extracción de MFCC
+            int num_frames = mfccExtractor.extract_mfcc(audioBuffer, TOTAL_SAMPLES, mfcc_temp, MAX_TIME_STEPS);
             
-            // 2. Extract MFCC features
-            Serial.println("2. Extracting MFCC features...");
-            int num_frames = mfccExtractor.extract_mfcc(
-                processed_audio, TOTAL_SAMPLES, mfcc_features, MAX_TIME_STEPS);
+            // 3. Ajuste a longitud fija y normalización MFCC
+            mfccExtractor.pad_to_fixed_length(mfcc_temp, num_frames, mfcc_normalized, MAX_TIME_STEPS);
             
-            Serial.printf("   Extracted %d frames\n", num_frames);
+            // 4. Inferencia TFLite
+            int classId;
+            float confidence;
+            voiceModel.predict_with_confidence(classId, confidence, mfcc_normalized);
             
-            // 3. Pad/truncate to fixed length
-            Serial.println("3. Padding to fixed length...");
-            mfccExtractor.pad_to_fixed_length(
-                mfcc_features, num_frames, mfcc_normalized, MAX_TIME_STEPS);
+            Serial.printf("Tiempo de proceso: %lu ms\n", millis() - start);
             
-            // 4. Normalize MFCC
-            //Serial.println("4. Normalizing MFCC...");
-            //mfccExtractor.normalize_mfcc(
-            //    mfcc_normalized, N_MFCC, MAX_TIME_STEPS);
-            
-            // 5. Run inference
-            Serial.println("5. Running inference...");
-            int classId = voiceModel.predict(mfcc_features); //.predict(mfcc_normalized)
-            
-            // Get confidence
-            float probabilities[NUM_CLASSES];
-            voiceModel.get_output_probabilities(probabilities);
-            float confidence = (classId >= 0) ? probabilities[classId] : 0.0f;
-            
-            unsigned long processingTime = millis() - startTime;
-            Serial.printf("\nProcessing time: %lu ms\n", processingTime);
-            
-            // 6. Handle prediction result (with synchronization)
             xSemaphoreTake(modelReadySemaphore, portMAX_DELAY);
             handlePrediction(classId, confidence);
             xSemaphoreGive(modelReadySemaphore);
@@ -384,86 +233,31 @@ void mlInferenceTask(void* pvParameters) {
 }
 
 // ============================================================================
-// Setup and Main
+// Setup
 // ============================================================================
 
 void setup() {
     Serial.begin(115200);
-    delay(1000);
-    
-    Serial.println("\n=== Voice Recognition System Starting ===");
-    
-    // Allocate large audio buffers in heap (malloc uses PSRAM if available)
-    Serial.println("Allocating audio buffers...");
-    audioBuffer1 = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
-    audioBuffer2 = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
-    processed_audio = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
-    
-    if (!audioBuffer1 || !audioBuffer2 || !processed_audio) {
-        Serial.println("ERROR: Failed to allocate PSRAM for audio buffers!");
-        while (1) {
-            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-            delay(100);
-        }
-    }
-    
-    currentRecordingBuffer = audioBuffer1;
-    Serial.println("✓ Audio buffers allocated in PSRAM");
-    
-    // Initialize GPIO
     pinMode(LED_BUILTIN, OUTPUT);
-    pinMode(POTENTIOMETER_PIN, INPUT);
-    pinMode(MICROPHONE_PIN, INPUT);
     analogReadResolution(12);
     
-    // Create FreeRTOS queues and semaphores
-    audioReadyQueue = xQueueCreate(1, 0);  // Binary queue
+    audioReadyQueue = xQueueCreate(1, 0);
     modelReadySemaphore = xSemaphoreCreateMutex();
     
-    // Initialize TFLite model
-    Serial.println("Initializing voice model...");
-    if (voiceModel.initialize()) {
+    Serial.println("Inicializando Modelo TFLite...");
+    if (voiceModel.initialize(voiceModel_3classes_tflite)) {
         modelReady = true;
-        Serial.println("✓ Model initialized successfully");
+        Serial.println("✓ Modelo cargado correctamente");
     } else {
-        Serial.println("✗ Failed to initialize model");
-        while (1) {
-            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-            delay(500);
-        }
+        Serial.println("✗ Error al cargar el modelo");
+        while(1) { digitalWrite(LED_BUILTIN, HIGH); delay(100); digitalWrite(LED_BUILTIN, LOW); delay(100); }
     }
-    
-    // Create FreeRTOS tasks
-    // Task 1: WiFi + Audio (Core 0)
-    xTaskCreatePinnedToCore(
-        wifiAndAudioTask,      // Task function
-        "WiFi_Audio_Task",     // Task name
-        8192,                  // Stack size (8KB)
-        nullptr,               // Parameter
-        1,                     // Priority
-        &wifiTaskHandle,       // Task handle
-        0                      // Core ID (0)
-    );
-    
-    // Task 2: ML Inference (Core 1)
-    xTaskCreatePinnedToCore(
-        mlInferenceTask,       // Task function
-        "ML_Inference_Task",   // Task name
-        16384,                 // Stack size (16KB) - larger for ML
-        nullptr,               // Parameter
-        1,                     // Priority
-        &mlTaskHandle,         // Task handle
-        1                      // Core ID (1)
-    );
-    
-    Serial.println("\n=== FreeRTOS Tasks Created ===");
-    Serial.println("Core 0: WiFi + Audio Recording");
-    Serial.println("Core 1: ML Inference");
-    Serial.println("\nSend 'g' via serial to record audio and run inference");
+
+    xTaskCreatePinnedToCore(wifiAndAudioTask, "WiFiTask", 8192, NULL, 1, &wifiTaskHandle, 0);
+    xTaskCreatePinnedToCore(mlInferenceTask, "MLTask", 16384, NULL, 1, &mlTaskHandle, 1);
 }
 
 void loop() {
-    // Main loop is handled by FreeRTOS scheduler
-    // This function will not be called frequently
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // El loop principal está deshabilitado para que FreeRTOS maneje todo
+    vTaskDelay(portMAX_DELAY);
 }
