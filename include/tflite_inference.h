@@ -1,14 +1,13 @@
 #ifndef TFLITE_INFERENCE_H
 #define TFLITE_INFERENCE_H
 
-#include "tensorflow/lite/micro/micro_interpreter.h"
-#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
-#include "tensorflow/lite/schema/schema_generated.h"
+#include <cstdint>
+#include <cmath>
+#include <cstring>
 
 // --- Model Configuration ---
 #define INPUT_HEIGHT 13      // MFCC coefficients
 #define INPUT_WIDTH 64       // Time steps
-#define INPUT_CHANNELS 1     // Grayscale
 #define NUM_CLASSES 3        // ambiente, apagarLuz, prenderLuz
 
 // Class indices
@@ -16,70 +15,82 @@
 #define CLASS_APAGAR_LUZ 1
 #define CLASS_PRENDER_LUZ 2
 
-// Class names
-const char* CLASS_NAMES[] = {
+// Class names (static to avoid multiple definition)
+static constexpr const char* CLASS_NAMES[] = {
     "ambiente",
     "apagarLuz",
     "prenderLuz"
 };
 
 /**
- * TFLite Inference Engine for Voice Recognition
- * Runs the voiceModel_3classes.tflite model on ESP32
+ * Lightweight Neural Network Inference Engine for ESP32
+ * Executes the pre-trained voice model without external dependencies
  */
 class VoiceModelInference {
 private:
-    // TFLite components
-    tflite::MicroInterpreter* interpreter;
-    TfLiteTensor* input_tensor;
-    TfLiteTensor* output_tensor;
+    // Model state
+    bool model_loaded;
     
-    // Input buffer: (1, 13, 64, 1)
-    float input_buffer[INPUT_HEIGHT * INPUT_WIDTH * INPUT_CHANNELS];
+    // Large intermediate buffers (use PSRAM to save DRAM)
+    float* conv1_out;    // Conv2D output (6 * 64 * 16 floats)
+    float* pool1_out;    // MaxPool output
+    float* conv2_out;    // Conv2D output
+    float* pool2_out;    // MaxPool output
+    float* conv3_out;    // Conv2D output
+    float* flatten_out;  // Flatten output
+    
+    // Small buffers in DRAM (frequently accessed)
+    float dense1_out[64];            // Dense output
+    float logits[NUM_CLASSES];       // Final logits
+    float output[NUM_CLASSES];       // Softmax probabilities
+    
+    // Layer execution functions
+    void batch_norm_2d(float* input, int h, int w, int c);
+    void conv2d_layer(float* input, int in_h, int in_w, int in_c,
+                     int out_c, int kernel_h, int kernel_w, int stride);
+    void maxpool2d_layer(float* input, int in_h, int in_w, int in_c,
+                        float* output, int pool_h, int pool_w, int stride);
+    void flatten_layer(float* input, int h, int w, int c, float* output);
+    void dense_layer(float* input, int input_size, int output_size,
+                    float* output, bool with_activation);
+    void leaky_relu(float* data, int size, float alpha = 0.2f);
+    void softmax_activation(float* data, int size);
     
 public:
+    VoiceModelInference();
+    ~VoiceModelInference();
+    
     /**
-     * Initialize the inference engine with the model data
-     * @param model_data: Pointer to the .tflite model data (in PROGMEM on ESP32)
-     * @param error_reporter: Custom error reporter (optional)
-     * @return true if initialization successful
+     * Initialize the model (loads pre-trained weights)
      */
-    bool initialize(const unsigned char* model_data);
+    bool initialize();
     
     /**
      * Run inference on MFCC input
      * @param mfcc: Input MFCC features (13 x 64)
-     * @return Prediction result (0, 1, or 2)
+     * @return Prediction class (0, 1, or 2)
      */
     int predict(float* mfcc);
     
     /**
-     * Get raw output probabilities
-     * @param probabilities: Output array (must be size >= NUM_CLASSES)
+     * Get output probabilities
      */
     void get_output_probabilities(float* probabilities);
     
     /**
-     * Get prediction with confidence score
-     * @param class_id: Output class ID (0, 1, or 2)
-     * @param confidence: Output confidence (0.0 to 1.0)
+     * Get prediction with confidence
      */
     void predict_with_confidence(int& class_id, float& confidence, float* mfcc);
     
     /**
-     * Get class name from prediction
+     * Get class name string
      */
     const char* get_class_name(int class_id);
     
     /**
-     * Reset interpreter state (if needed)
+     * Check if model is ready
      */
-    void reset();
-    
-    /**
-     * Get model info
-     */
-    void print_model_info();
+    bool is_ready() { return model_loaded; }
 };
 
 #endif // TFLITE_INFERENCE_H

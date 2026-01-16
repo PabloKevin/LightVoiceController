@@ -1,11 +1,11 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
+#include <cstdlib>
 #include "credentials.h"
 #include "audio_processing.h"
 #include "mfcc.h"
 #include "tflite_inference.h"
-#include "model_data.h"  // Embedded TFLite model
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -21,14 +21,15 @@
 
 // --- Audio Buffers ---
 // Double buffering for audio capture (one for recording, one for processing)
-float audioBuffer1[TOTAL_SAMPLES];
-float audioBuffer2[TOTAL_SAMPLES];
-float* currentRecordingBuffer = audioBuffer1;
+// Using pointers to allocate in PSRAM to save DRAM
+float* audioBuffer1 = nullptr;
+float* audioBuffer2 = nullptr;
+float* currentRecordingBuffer = nullptr;
 float* processedAudioBuffer = nullptr;
 
 // --- Processing Buffers ---
-float processed_audio[TOTAL_SAMPLES];
-float mfcc_features[N_MFCC * MAX_TIME_STEPS];  // (13 x 64)
+float* processed_audio = nullptr;
+float mfcc_features[N_MFCC * MAX_TIME_STEPS];  // (13 x 64) - small enough for DRAM
 float mfcc_normalized[N_MFCC * MAX_TIME_STEPS];
 
 // --- Global Objects ---
@@ -390,21 +391,38 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     
+    Serial.println("\n=== Voice Recognition System Starting ===");
+    
+    // Allocate large audio buffers in heap (malloc uses PSRAM if available)
+    Serial.println("Allocating audio buffers...");
+    audioBuffer1 = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
+    audioBuffer2 = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
+    processed_audio = (float*)malloc(TOTAL_SAMPLES * sizeof(float));
+    
+    if (!audioBuffer1 || !audioBuffer2 || !processed_audio) {
+        Serial.println("ERROR: Failed to allocate PSRAM for audio buffers!");
+        while (1) {
+            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+            delay(100);
+        }
+    }
+    
+    currentRecordingBuffer = audioBuffer1;
+    Serial.println("✓ Audio buffers allocated in PSRAM");
+    
     // Initialize GPIO
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(POTENTIOMETER_PIN, INPUT);
     pinMode(MICROPHONE_PIN, INPUT);
     analogReadResolution(12);
     
-    Serial.println("\n=== Voice Recognition System Starting ===");
-    
     // Create FreeRTOS queues and semaphores
     audioReadyQueue = xQueueCreate(1, 0);  // Binary queue
     modelReadySemaphore = xSemaphoreCreateMutex();
     
     // Initialize TFLite model
-    Serial.println("Initializing TFLite model...");
-    if (voiceModel.initialize(voiceModel_3classes_tflite)) {
+    Serial.println("Initializing voice model...");
+    if (voiceModel.initialize()) {
         modelReady = true;
         Serial.println("✓ Model initialized successfully");
     } else {
