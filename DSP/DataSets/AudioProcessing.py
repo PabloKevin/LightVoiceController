@@ -6,6 +6,8 @@ from scipy.fft import fft, fftfreq
 from scipy.signal import medfilt
 import librosa
 import librosa.display
+import os
+import json
 
 def bandpass_filter(data, lowcut, highcut, fs, order=5):
     """
@@ -72,6 +74,35 @@ def plotSignal(data, sample_rate, filename):
     
     plt.show()
 
+
+def plot_multiple_signals(class2plot, sample_rate=12000):
+    DATA_PATH_Train = f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TrainSet/"
+    DATA_PATH_Test = f"/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet/"
+    filesTrain = [DATA_PATH_Train+f for f in os.listdir(DATA_PATH_Train) if f.endswith('.wav') and f.startswith(class2plot)]
+    filesTest = [DATA_PATH_Test+f for f in os.listdir(DATA_PATH_Test) if f.endswith('.wav') and f.startswith(class2plot)]
+    files = filesTrain + filesTest
+
+    audios = []
+    for file in files:
+        audio, sr = process_audio_wav(file)
+        audios.append(audio)
+
+    fig, axes = plt.subplots(2, 5, figsize=(20, 8))
+    axes = axes.flatten()
+
+    for i, audio in enumerate(audios):
+        length = audio.shape[0] / sample_rate
+        time = np.linspace(0., length, audio.shape[0])
+
+        axes[i].plot(time, audio, color='blue')
+        axes[i].set_title(f"Señal: {class2plot}_{i}")
+        axes[i].set_xlabel("Tiempo [s]")
+        axes[i].set_ylabel("Amplitud")
+        axes[i].grid(True)
+        axes[i].axhline(y=0, color='r', linestyle='-')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_frequency_spectrum(data, fs, title="Espectro de Frecuencia"):
@@ -241,13 +272,13 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
     data = medfilt(data, kernel_size=11) #
 
     # 2. Aplicar filtro (Frecuencias para voz humana: 300-3000Hz)
-    data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//256]
+    data_filtrada = bandpass_filter(data, 320.0, 3000.0, fs, order=6)[len(data)//32 : -len(data)//1024]
     data_filtrada = highpass_filter(data_filtrada, 340.0, fs, order=7)
 
     #data_filtrada = apply_bandstop_stable(data_filtrada, 380, 500, fs)
     data_filtrada = kill_peaks(data_filtrada, min_data=0.6, windows=5, threshold=60.0, trials=5)
     data_filtrada = simple_spectral_subtraction(data_filtrada, noise_reduction_factor=1.3)
-    data_filtrada = TrimAudio(data_filtrada, end_duration=1.4, fs=fs)
+    #data_filtrada = TrimAudio(data_filtrada, end_duration=1.4, fs=fs)
 
 
     if plot:
@@ -265,6 +296,20 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
     return data_filtrada, fs
 
 if __name__ == "__main__":
-    wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/prenderLuz_9_aug_4.wav"
+    wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/luzCalida_9_aug_4.wav"
     output_path = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/ProcessedAudio/"
     process_audio_wav(wav_file, output_path, plot=True)
+    CLASS_MAP = {
+                "ambiente": 0,
+                "apagarLuz": 1,
+                "prenderLuz": 2,
+                "luzBaja": 3,
+                "luzMedia": 4,
+                "luzAlta": 5,
+                "luzCozy": 6,
+                "luzDeDia": 7,
+                "luzFocus": 8,
+                "luzCalida": 9
+            }
+    #for class_name in CLASS_MAP.keys():
+    #    plot_multiple_signals(class_name)

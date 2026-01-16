@@ -67,7 +67,8 @@ def prepare_dataset():
     y = []
     
     # Listar todos los archivos wav
-    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav') and f.startswith(("ambiente", "apagarLuz", "prenderLuz"))]
+    files = [f for f in os.listdir(DATA_PATH) if f.endswith('.wav') and f.startswith(("ambiente", "apagarLuz", "prenderLuz")) and not f.startswith("luzAlta_9")]
+    # "ambiente", "apagarLuz", "prenderLuz", "luzBaja", "luzMedia", "luzAlta"
     
     print(f"Iniciando extracción de MFCCs para {len(files)} archivos...")
 

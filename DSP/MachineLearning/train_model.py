@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     # Entrenar por un número fijo de épocas 
     # (Usa el número de épocas donde viste que el modelo convergía en tus pruebas previas)
-    EPOCHS = 100 
+    EPOCHS = 250 
     
     print(f"\n🚀 Entrenando durante {EPOCHS} épocas...")
     history = model.fit(
