@@ -5,7 +5,7 @@
 const char* CLASS_NAMES[] = {"ambiente", "apagarLuz", "prenderLuz"};
 
 // 80KB es suficiente para la mayoría de modelos de audio en ESP32
-static const int kTensorArenaSize = 60 * 1024;
+static const int kTensorArenaSize =40 * 1024;
 static uint8_t tensor_arena[kTensorArenaSize];
 
 bool VoiceModelInference::initialize(const unsigned char* model_data) {
