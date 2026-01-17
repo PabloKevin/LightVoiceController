@@ -1,59 +1,121 @@
 #include "tflite_inference.h"
-#include <cstring>
 
-// Definición de nombres (solo aquí)
-const char* CLASS_NAMES[] = {"ambiente", "apagarLuz", "prenderLuz"};
+#include "model_data.h"
 
-// 80KB es suficiente para la mayoría de modelos de audio en ESP32
-static const int kTensorArenaSize = 30 * 1024;
-uint8_t tensor_arena[kTensorArenaSize] __attribute__((aligned(16)));
+// TensorFlow Lite Micro headers
+#include "tensorflow/lite/schema/schema_generated.h"
+#include "tensorflow/lite/micro/micro_error_reporter.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/all_ops_resolver.h"
 
-bool VoiceModelInference::initialize(const unsigned char* model_data) {
-    const tflite::Model* model = tflite::GetModel(model_data);
-    static tflite::MicroMutableOpResolver<10> resolver;
-    resolver.AddConv2D();
-    resolver.AddMaxPool2D();
-    resolver.AddFullyConnected();
-    resolver.AddReshape();
-    resolver.AddSoftmax();
-    resolver.AddAdd();
-    resolver.AddLeakyRelu();
-    resolver.AddMul();
+#include <Arduino.h>
 
-    static tflite::MicroInterpreter static_interpreter(
-        model, resolver, tensor_arena, kTensorArenaSize, nullptr);
-    
-    interpreter = &static_interpreter;
-    if (interpreter->AllocateTensors() != kTfLiteOk) return false;
+// =====================
+// TFLite globals
+// =====================
+namespace {
+  tflite::MicroErrorReporter micro_error_reporter;
+  tflite::ErrorReporter* error_reporter = &micro_error_reporter;
 
-    input_tensor = interpreter->input(0);
-    output_tensor = interpreter->output(0);
-    return true;
+  const tflite::Model* model = nullptr;
+  tflite::MicroInterpreter* interpreter = nullptr;
+
+  TfLiteTensor* input_tensor = nullptr;
+  TfLiteTensor* output_tensor = nullptr;
+
+  // ⚠️ Tune this if needed (80 KB is safe for small CNNs)
+  constexpr int kTensorArenaSize = 80 * 1024;
+  alignas(16) static uint8_t tensor_arena[kTensorArenaSize];
 }
 
-int VoiceModelInference::predict(float* mfcc) {
-    std::memcpy(input_tensor->data.f, mfcc, 13 * 64 * sizeof(float));
-    if (interpreter->Invoke() != kTfLiteOk) return -1;
-    
-    float* output_data = output_tensor->data.f;
-    int max_idx = 0;
-    for (int i = 1; i < NUM_CLASSES; i++) {
-        if (output_data[i] > output_data[max_idx]) max_idx = i;
-    }
-    return max_idx;
+// =====================
+// Initialization
+// =====================
+bool tflite_init() {
+  // Load model
+  model = tflite::GetModel(voiceModel_3classes_tflite);
+  if (model->version() != TFLITE_SCHEMA_VERSION) {
+    error_reporter->Report(
+      "Model schema %d not equal to supported %d",
+      model->version(), TFLITE_SCHEMA_VERSION
+    );
+    return false;
+  }
+
+  // Resolver (use AllOpsResolver for safety)
+  static tflite::AllOpsResolver resolver;
+
+  // Create interpreter
+  static tflite::MicroInterpreter static_interpreter(
+    model,
+    resolver,
+    tensor_arena,
+    kTensorArenaSize,
+    error_reporter
+  );
+  interpreter = &static_interpreter;
+
+  // Allocate tensors
+  TfLiteStatus allocate_status = interpreter->AllocateTensors();
+  if (allocate_status != kTfLiteOk) {
+    error_reporter->Report("AllocateTensors() failed");
+    return false;
+  }
+
+  // Get input & output tensors
+  input_tensor = interpreter->input(0);
+  output_tensor = interpreter->output(0);
+
+  // Debug info
+  Serial.println("🧠 TFLite initialized");
+  Serial.print("Input type: ");
+  Serial.println(input_tensor->type);
+  Serial.print("Input bytes: ");
+  Serial.println(input_tensor->bytes);
+  Serial.print("Output bytes: ");
+  Serial.println(output_tensor->bytes);
+
+  return true;
 }
 
-void VoiceModelInference::predict_with_confidence(int& class_id, float& confidence, float* mfcc) {
-    class_id = predict(mfcc);
-    if (class_id >= 0) confidence = output_tensor->data.f[class_id];
-    else confidence = 0.0f;
+// =====================
+// Run inference
+// =====================
+bool tflite_invoke() {
+  if (!interpreter) {
+    return false;
+  }
+
+  TfLiteStatus invoke_status = interpreter->Invoke();
+  if (invoke_status != kTfLiteOk) {
+    error_reporter->Report("Invoke failed");
+    return false;
+  }
+
+  return true;
 }
 
-const char* VoiceModelInference::get_class_name(int class_id) {
-    if (class_id >= 0 && class_id < NUM_CLASSES) return CLASS_NAMES[class_id];
-    return "unknown";
+// =====================
+// Access tensors
+// =====================
+TfLiteTensor* tflite_input() {
+  return input_tensor;
 }
 
-void VoiceModelInference::get_output_probabilities(float* probabilities) {
-    std::memcpy(probabilities, output_tensor->data.f, NUM_CLASSES * sizeof(float));
+TfLiteTensor* tflite_output() {
+  return output_tensor;
+}
+
+int tflite_run(const float* input, float* output) {
+  TfLiteTensor* in = tflite_input();
+  TfLiteTensor* out = tflite_output();
+
+  memcpy(in->data.f, input, in->bytes);
+
+  if (!tflite_invoke()) {
+    return -1;
+  }
+
+  memcpy(output, out->data.f, out->bytes);
+  return 0;
 }

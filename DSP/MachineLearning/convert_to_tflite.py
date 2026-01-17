@@ -11,7 +11,7 @@ def convert_model_to_tflite():
     """Convert the best Keras model to TFLite format"""
     
     # Path to the best model
-    model_path = "model_weights/best_models/voiceModel_FullTrain_3classes_best.keras"
+    model_path = "model_weights/best_models/voiceModel_FullTrain_3classes_SMALL.keras"
     output_dir = "model_weights/tflite_models"
     
     # Create output directory
@@ -41,7 +41,7 @@ def convert_model_to_tflite():
     tflite_model = converter.convert()
     
     # Save the TFLite model
-    tflite_output_path = os.path.join(output_dir, "voiceModel_3classes.tflite")
+    tflite_output_path = os.path.join(output_dir, "voiceModel_3classes_small.tflite")
     with open(tflite_output_path, "wb") as f:
         f.write(tflite_model)
     

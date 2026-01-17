@@ -20,6 +20,9 @@ if __name__ == "__main__":
     X = np.load(os.path.join(data_path, "X_train.npy"))
     y = np.load(os.path.join(data_path, "y_train.npy"))
 
+    mean, std = np.mean(X), np.std(X)
+    X = (X - mean) / (std + 1e-8)
+
     with open('class_map.json', 'r') as file:
         mapping = json.load(file)
     CLASS_MAP = mapping["CLASS_MAP"]
@@ -53,14 +56,6 @@ if __name__ == "__main__":
     
     model_name = os.path.join(output_path, "voiceModel_FullTrain.keras")
     model.save(model_name)
-    
-    # Guardamos los valores de normalización en un JSON para el ESP32
-    norm_values = {
-        "mean": float(global_mean),
-        "std": float(global_std)
-    }
-    with open(os.path.join(output_path, "norm_params.json"), "w") as f:
-        json.dump(norm_values, f)
 
     print(f"\n✅ Proceso completado.")
     print(f"Modelo: {model_name}")

@@ -6,15 +6,15 @@ def build_model(input_shape, num_classes):
     model = models.Sequential([
         # --- BLOQUE CONVOLUCIONAL (Extractor) ---
         # input_shape: (13, 64, 1) -> (MFCCs, Tiempo, Canal)
-        layers.BatchNormalization(input_shape=input_shape),
-        layers.Dropout(0.05),
+        #layers.BatchNormalization(input_shape=input_shape),
+        #layers.Dropout(0.05),
         layers.Conv2D(16, (3, 3), activation='leaky_relu', padding='same', input_shape=input_shape, strides=1),
         layers.MaxPooling2D((2, 1)), # Reducimos solo la dimensión temporal para mantener MFCCs
         layers.Dropout(0.5),
         layers.Conv2D(16, (3, 3), activation='leaky_relu', padding='same', strides=1),
         layers.MaxPooling2D((2, 2)), # Reducimos solo la dimensión temporal para mantener MFCCs
         layers.Dropout(0.5),
-        layers.Conv2D(32, (3, 1), activation='leaky_relu', padding='same', strides=1),
+        layers.Conv2D(16, (3, 1), activation='leaky_relu', padding='same', strides=1),
         #layers.MaxPooling2D((3, 1)), # Reducimos solo la dimensión temporal para mantener MFCCs
         layers.Dropout(0.5),
 
@@ -25,6 +25,8 @@ def build_model(input_shape, num_classes):
         #layers.Reshape((32, 64)),
 
         layers.Flatten(),
+        layers.Dense(16, activation='leaky_relu'),
+        layers.Dropout(0.5),
         layers.Dense(64, activation='leaky_relu'),
         layers.Dropout(0.5),
         layers.Dense(num_classes, activation='softmax')
@@ -47,7 +49,7 @@ class voiceModelNN():
         
 
     def predict(self, X):
-        #X = (X - self.mean) / (self.std + 1e-8)
+        X = (X - self.mean) / (self.std + 1e-8)
         if len(X.shape) == 4:
             X = X.reshape(X.shape[0], 13, 64, 1)
             print(f"Input reshaped to: {X.shape}")
