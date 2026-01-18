@@ -23,6 +23,8 @@ TfLiteTensor* output = nullptr;
 
 void setup() {
     Serial.begin(115200);
+    Serial.setTimeout(2000);
+    
     tflite::InitializeTarget();
 
     // 2. Load Model
@@ -62,59 +64,41 @@ void setup() {
 }
 
 void loop() {
-    // 1. Quantize and Load the real data into the input tensor
-    // The test_sample_data
-    for (int i = 0; i < 832; i++) {
-        float raw_val = sample_input[i];
+    if (Serial.available() > 0) {
+        char start_cmd = Serial.read();
         
-        // Formula: quantized_val = (float_val / scale) + zero_point
-        int8_t quantized_val = (int8_t)(raw_val / input->params.scale + input->params.zero_point);
-        
-        input->data.int8[i] = quantized_val;
-    }
+        if (start_cmd == 'S') {
+            float incoming_sample[832];
+            
+            // Read 832 floats (3328 bytes)
+            // Note: readBytes is blocking, ensure timeout is sufficient
+            uint8_t* buffer = (uint8_t*)incoming_sample;
+            size_t bytes_to_read = 832 * sizeof(float);
+            size_t bytes_read = Serial.readBytes(buffer, bytes_to_read);
 
-    // 2. Run Inference
-    if (interpreter->Invoke() != kTfLiteOk) {
-        Serial.println("Inference failed!");
-        return;
-    }
+            if (bytes_read == bytes_to_read) {
+                // 1. Quantize and Load into Input Tensor
+                for (int i = 0; i < 832; i++) {
+                    input->data.int8[i] = (int8_t)(incoming_sample[i] / input->params.scale + input->params.zero_point);
+                }
 
-    // 1. Check if the input is actually changing
-    Serial.printf("Input[0] raw: %f, quantized: %d\n", sample_input[0], input->data.int8[0]);
+                // 2. Run Inference
+                interpreter->Invoke();
 
-    // 2. Check the raw output bytes before the math
-    Serial.printf("Raw Output Bytes: %d, %d, %d\n", 
-                output->data.int8[0], 
-                output->data.int8[1], 
-                output->data.int8[2]);
+                // 3. Find ArgMax
+                int pred_class = 0;
+                float max_prob = -1.0;
+                for (int i = 0; i < 3; i++) {
+                    float prob = (output->data.int8[i] - output->params.zero_point) * output->params.scale;
+                    if (prob > max_prob) {
+                        max_prob = prob;
+                        pred_class = i;
+                    }
+                }
 
-    // 3. Print the scales (if these are 0, your math will always be 0)
-    // Check if params are actually zero and try to recover them
-    float output_scale = output->params.scale;
-    int output_zp = output->params.zero_point;
-
-    // If the library is failing to report the scale in the struct, 
-    Serial.printf("Output Scale: %f, ZeroPoint: %d\n", output->params.scale, output->params.zero_point);
-    
-    // check the quantization object directly:
-    if (output_scale == 0.0f) {
-        auto* quant = reinterpret_cast<TfLiteAffineQuantization*>(output->quantization.params);
-        if (quant && quant->scale) {
-            output_scale = quant->scale->data[0];
-            output_zp = quant->zero_point->data[0];
+                // 4. Send Result back to Python
+                Serial.printf("RESULT:%d,%.4f\n", pred_class, max_prob);
+            }
         }
-        Serial.printf("Output Scale: %f, ZeroPoint: %d\n", output_scale, output_zp);
     }
-
-
-    // 3. Print Results
-    Serial.print("Model Output: ");
-    for (int i = 0; i < 3; i++) {
-        float prob = (output->data.int8[i] - output->params.zero_point) * output->params.scale;
-        Serial.print(prob, 4);
-        if (i < 2) Serial.print(", ");
-    }
-    Serial.println("\n");
-
-    delay(5000); // Wait 5 seconds between tests
 }
