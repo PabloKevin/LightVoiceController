@@ -15,6 +15,8 @@ using MyOpResolver = tflite::MicroMutableOpResolver<10>;
 // Global variables for TFLM
 const int kTensorArenaSize = 80 * 1024; // Increased to be safe
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+const float mean = -50.281225;
+const float std_ = 159.534246;
 
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
@@ -79,7 +81,8 @@ void loop() {
             if (bytes_read == bytes_to_read) {
                 // 1. Quantize and Load into Input Tensor
                 for (int i = 0; i < 832; i++) {
-                    input->data.int8[i] = (int8_t)(incoming_sample[i] / input->params.scale + input->params.zero_point);
+                    float incoming_sample_normalized = (incoming_sample[i] - mean) / (std_ + 1e-8);
+                    input->data.int8[i] = (int8_t)(incoming_sample_normalized / input->params.scale + input->params.zero_point);
                 }
 
                 // 2. Run Inference

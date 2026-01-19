@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 # --- CONFIGURATION ---
 PORT = '/dev/ttyUSB0'  # Change to your port (e.g., 'COM3' or '/dev/ttyACM0')
 BAUD = 115200
-X_PATH = '../DSP/DataSets/X_train.npy'
+X_PATH = '../DSP/DataSets/X_test.npy'
 Y_PATH = '../DSP/DataSets/y_test.npy'
 CLASS_MAP_PATH = '../DSP/MachineLearning/class_map.json'
 

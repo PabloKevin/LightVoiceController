@@ -40,7 +40,7 @@ def tflite_to_c_array(tflite_path, output_header_path):
     print(f"  Model size: {len(tflite_data) / 1024:.2f} KB")
 
 if __name__ == "__main__":
-    tflite_path = "DSP/MachineLearning/model_weights/tflite_models/voiceModel_3classes_small.tflite"
+    tflite_path = "DSP/MachineLearning/model_weights/tflite_models/voiceModel_3classes_small02.tflite"
     output_path = "include/model_data.h"
     
     if not os.path.exists(tflite_path):
