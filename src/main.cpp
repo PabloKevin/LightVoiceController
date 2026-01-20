@@ -28,7 +28,6 @@ void loop() {
         if (c == 'g') {
             digitalWrite(LED_BUILTIN, HIGH);
             recordAudio();
-
             processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
             digitalWrite(LED_BUILTIN, LOW);
             playBackSerial();

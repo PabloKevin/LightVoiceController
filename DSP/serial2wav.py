@@ -11,7 +11,7 @@ from scipy.io import wavfile
 SERIAL_PORT = '/dev/ttyUSB0'  # Cambia esto según tu puerto 
 BAUD_RATE = 115200
 SAMPLE_RATE = 12000           # Debe coincidir con el ESP32
-TIME_TO_RECORD = 1 #Segundos
+TIME_TO_RECORD = .5 #Segundos
 OUTPUT_PATH = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_pruebas/"
 SAMPLES_TO_READ = SAMPLE_RATE * TIME_TO_RECORD       # 16000 Hz * 2 segundos
 
@@ -49,9 +49,10 @@ def main():
             if line.isdigit():
                 # El ADC entrega 0-4095. 
                 # Para audio, restamos el offset (2048) y escalamos a 16 bits.
-                val = - int(line) # El sensor invierte la señal, así que volvemos a invertirla aquí.
-                normalized = (val + 2048) * 16 # Escalar a rango -32768 a 32767
-                audio_data.append(normalized)
+                #val = - int(line) # El sensor invierte la señal, así que volvemos a invertirla aquí.
+                #normalized = (val + 2048) * 16 # Escalar a rango -32768 a 32767
+                normalized = float(line) * 32767
+                audio_data.append(int(normalized))
                 count += 1
                 if count % 1000 == 0:
                     print(f"Recibidas {count}/{SAMPLES_TO_READ} muestras...")
