@@ -4,8 +4,8 @@
 
 // CONSTANTES
 #define microphonePin 34
-#define SAMPLE_RATE 12000
-#define RECORD_TIME 2 // segundos
+#define SAMPLE_RATE 8000
+#define RECORD_TIME 0.5 // segundos
 const unsigned int TOTAL_SAMPLES = (SAMPLE_RATE * RECORD_TIME);
 // Reservamos el buffer en la memoria del ESP32
 union audio {

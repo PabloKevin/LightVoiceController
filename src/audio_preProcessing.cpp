@@ -129,24 +129,29 @@ void AudioProcessor::apply_bandpass(float* data, int len, float fs, float lf_cut
 }
 
 void AudioProcessor::process_complete_pipeline(float* data, int len) {
-    if (data == nullptr) return;
+    int windows = 1;
+    int window_len = TOTAL_SAMPLES/windows;
 
-    // 1. Quitar offset y normalizar base
-    remove_dc_offset(data, len);
-    normalize_audio(data, len);
-    
-    // 2. Skip inicial (reducimos el puntero, no copiamos)
-    int skip = len / 15;
-    int working_len = len - skip;
-    // Movemos los datos hacia adelante para sobreescribir el 'skip'
-    std::memmove(data, data + skip, working_len * sizeof(float));
+    for (int i=0; i<windows; i++){
+        // Copiar datos de la ventana original
+        float* window_pointer = data + (i*window_len);
 
-    // 3. Filtros (Ahora no consumen RAM extra)
-    audio_blur(data, working_len, 13);
-    median_filter(data, working_len, 11);
-    
-    apply_bandpass(data, working_len, SAMPLE_RATE, 320.0f, 3000.0f);
+        // 1. Quitar offset y normalizar base
+        remove_dc_offset(window_pointer, window_len);
+        normalize_audio(window_pointer, window_len);
+        
+        /*
+        // 2. Skip inicial (reducimos el puntero, no copiamos)
+        int skip = len / 15;
+        int working_len = len - skip;
+        // Movemos los datos hacia adelante para sobreescribir el 'skip'
+        std::memmove(window_pointer, data + skip, window_len * sizeof(float));
+        */
 
-    // 4. Kill Peaks
-
+        // 3. Filtros (Ahora no consumen RAM extra)
+        audio_blur(window_pointer, window_len, 13);
+        median_filter(window_pointer, window_len, 11);
+        
+        apply_bandpass(window_pointer, window_len, SAMPLE_RATE, 320.0f, 3000.0f);
+    }
 }

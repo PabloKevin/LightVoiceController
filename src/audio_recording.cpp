@@ -22,8 +22,8 @@ bool recordAudio() {
 
     for (int i = 0; i < TOTAL_SAMPLES; i++) {
         unsigned long nextSampleTime = micros() + sampleDelay;
-        
-        audioBuffer[i] = (-(float)(microphonePin) + 2048) * 16;
+        float sample_val = analogRead(microphonePin);
+        audioBuffer[i] = ((-sample_val + 2048) * 16);
         
         // Esperamos con precisión de microsegundos para mantener la frecuencia
         while (micros() < nextSampleTime) {
@@ -40,7 +40,7 @@ bool recordAudio() {
 void playBackSerial() {
     Serial.println("Enviando datos de audio al monitor...");
     for (int i = 0; i < TOTAL_SAMPLES; i++) {
-        Serial.println((int)(audioBuffer[i]*32767));
+        Serial.println((int)(audioBuffer[i]*32767.0f)); //*32767
         // delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
     }
 }
