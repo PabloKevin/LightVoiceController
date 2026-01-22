@@ -1,0 +1,24 @@
+from tensorflow.keras.models import load_model
+import numpy as np
+import os
+from sklearn.metrics import r2_score
+
+model_path = "model_weights/audioProcessingModel.keras"
+model = load_model(model_path)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+data_path = os.path.join(BASE_DIR, "../..", "DataSets/RawAudio2MFCC")
+X_test = np.load(os.path.join(data_path, "X_test.npy"))
+y_test = np.load(os.path.join(data_path, "Y_test.npy"))
+
+Y_predicted = model.predict(X_test)
+
+
+r2 = r2_score(y_test, Y_predicted)
+print(f"Coeficiente de determinación R²: {r2:.4f}")
+
+save_path = os.path.join(BASE_DIR, "../..", "DataSets/RawAudio2MFCC/Y_predicted.npy")
+mean_yTrain = -47.319750827110255
+std_yTrain = 174.86826506622137
+Y_predicted = Y_predicted * std_yTrain + mean_yTrain
+np.save(save_path, Y_predicted)

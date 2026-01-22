@@ -115,6 +115,7 @@ def calculate_metrics(y_true, y_pred, num_classes):
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(BASE_DIR, "..", "DataSets/")
+    
     X = np.load(path + "X_test.npy")  # Forma esperada: (N, 13, 64)
     y = np.load(path + "y_test.npy")
 
