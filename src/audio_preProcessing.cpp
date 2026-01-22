@@ -1,6 +1,5 @@
 #include "audio_preProcessing.h"
 
-
 void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output) {
     int pad = kernel_len / 2;
     
@@ -129,7 +128,9 @@ void AudioProcessor::apply_bandpass(float* data, int len, float fs, float lf_cut
 }
 
 void AudioProcessor::process_complete_pipeline(float* data, int len) {
-    int windows = 1;
+    unsigned long startTime = millis();
+    Serial.println("Comenzando preprocesamiento...");
+    int windows = 2;
     int window_len = TOTAL_SAMPLES/windows;
 
     for (int i=0; i<windows; i++){
@@ -154,4 +155,5 @@ void AudioProcessor::process_complete_pipeline(float* data, int len) {
         
         apply_bandpass(window_pointer, window_len, SAMPLE_RATE, 320.0f, 3000.0f);
     }
+    Serial.printf(">>> Preprocesamiento finalizado. Tiempo total: %lu ms\n", millis() - startTime);
 }

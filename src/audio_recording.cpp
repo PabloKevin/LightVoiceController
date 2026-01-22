@@ -2,6 +2,8 @@
 
 // Reservamos el buffer en la memoria del ESP32
 float audioBuffer[TOTAL_SAMPLES]; 
+float processedBuffer[TOTAL_SAMPLES];
+
 bool isRecording = false;
 
 
@@ -19,6 +21,8 @@ bool recordAudio() {
     // Calculamos el tiempo entre muestras en microsegundos
     unsigned int sampleDelay = 1000000 / SAMPLE_RATE;
     unsigned long startTime = millis();
+
+    isRecording = true;
 
     for (int i = 0; i < TOTAL_SAMPLES; i++) {
         unsigned long nextSampleTime = micros() + sampleDelay;
@@ -40,7 +44,7 @@ bool recordAudio() {
 void playBackSerial() {
     Serial.println("Enviando datos de audio al monitor...");
     for (int i = 0; i < TOTAL_SAMPLES; i++) {
-        Serial.println((int)(audioBuffer[i]*32767.0f)); //*32767
+        Serial.println((int)(processedBuffer[i]*32767.0f)); //*32767
         // delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
     }
 }
