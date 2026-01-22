@@ -6,4 +6,5 @@
 include/credentials.h
 DSP/DataSets/RawAudio_TrainSet_Augmented/*
 DSP/DataSets/RawAudio_TestSet_Augmented/*
-DSP/MachineLearning/model_weights/voiceModel_*.keras
+DSP/MachineLearning/MFCC_to_voiceCommand/model_weights/voiceModel_*.keras
+DSP/DataSets/RawAudio2MFCC/*
