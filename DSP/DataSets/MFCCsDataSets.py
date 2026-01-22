@@ -11,7 +11,7 @@ FS = 12000                      # Tu frecuencia de 12kHz
 N_MFCC = 13                     # Número de coeficientes (ideal para ESP32)
 MAX_LEN = 64                    # Longitud temporal fija 
 
-def extract_features(file_path):
+def extract_features(file_path, windows=64):
     try:
         # Cargar audio
         #y, sr = librosa.load(file_path, sr=FS)
@@ -21,11 +21,11 @@ def extract_features(file_path):
         mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=N_MFCC)
         
         # Ajustar tamaño para que todos los ejemplos sean iguales (Padding/Truncate)
-        if mfcc.shape[1] < MAX_LEN:
-            pad_width = MAX_LEN - mfcc.shape[1]
+        if mfcc.shape[1] < windows:
+            pad_width = windows - mfcc.shape[1]
             mfcc = np.pad(mfcc, pad_width=((0, 0), (0, pad_width)), mode='constant')
         else:
-            mfcc = mfcc[:, :MAX_LEN]
+            mfcc = mfcc[:, :windows]
             
         return mfcc
     except Exception as e:

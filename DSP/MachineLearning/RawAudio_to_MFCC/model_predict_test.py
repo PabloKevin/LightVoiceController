@@ -8,17 +8,20 @@ model = load_model(model_path)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(BASE_DIR, "../..", "DataSets/RawAudio2MFCC")
-X_test = np.load(os.path.join(data_path, "X_test.npy"))
-y_test = np.load(os.path.join(data_path, "Y_test.npy"))
+X_test = np.load(os.path.join(data_path, "X_train.npy"))
+y_test = np.load(os.path.join(data_path, "Y_train.npy"))
 
 Y_predicted = model.predict(X_test)
 
+mean_yTrain = 9.795799596756644e-10
+std_yTrain = 0.0014433130028423165
+Y_predicted = Y_predicted * std_yTrain + mean_yTrain
 
 r2 = r2_score(y_test, Y_predicted)
 print(f"Coeficiente de determinación R²: {r2:.4f}")
 
 save_path = os.path.join(BASE_DIR, "../..", "DataSets/RawAudio2MFCC/Y_predicted.npy")
-mean_yTrain = -47.319750827110255
-std_yTrain = 174.86826506622137
-Y_predicted = Y_predicted * std_yTrain + mean_yTrain
-np.save(save_path, Y_predicted)
+#mean_yTrain = -47.319750827110255
+#std_yTrain = 174.86826506622137
+#Y_predicted = Y_predicted * std_yTrain + mean_yTrain
+#np.save(save_path, Y_predicted)
