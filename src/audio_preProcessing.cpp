@@ -1,4 +1,5 @@
 #include "audio_preProcessing.h"
+int working_len;
 
 void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output) {
     int pad = kernel_len / 2;
@@ -23,7 +24,6 @@ void convolve_1d_same(float* input, int input_len, const float* kernel, int kern
     memcpy(output, temp_out, sizeof(float) * input_len);
     delete[] temp_out;
 }
-
 
 class BandPassFilter {
     private:
@@ -88,6 +88,18 @@ void AudioProcessor::audio_blur(float* data, int len, int kernel_size) {
     convolve_1d_same(data, len, kernel, kernel_size, data);
 }
 
+void AudioProcessor::gaussian_blur(float* data, int len) {
+    int kernel_size = 15;
+    float kernel[kernel_size] = {0.0104712, 0.01643381, 0.03314067, 0.05728277, 0.08407849, 0.10822059
+                                , 0.12492744, 0.13089005, 0.12492744, 0.10822059, 0.08407849, 0.05728277
+                                , 0.03314067, 0.01643381, 0.0104712};
+
+    for (int i=0; i<kernel_size; i++){
+        kernel[i] = 1.0f/kernel_size;
+    }
+    convolve_1d_same(data, len, kernel, kernel_size, data);
+}
+
 void AudioProcessor::median_filter(float* data, int len, int kernel_size) {
     if (kernel_size > 21) kernel_size = 21;
     if (kernel_size < 3) return; // Un filtro de mediana de 1 no hace nada
@@ -127,33 +139,109 @@ void AudioProcessor::apply_bandpass(float* data, int len, float fs, float lf_cut
     }
 }
 
-void AudioProcessor::process_complete_pipeline(float* data, int len) {
+
+const float HighPassFilter::b[8] = { 0.66985341f, -4.68897389f, 14.06692168f, -23.44486948f, 23.44486948f, -14.06692168f, 4.68897389f, -0.66985341f };
+const float HighPassFilter::a[8] = { 1.0f, -6.20011746f, 16.51609997f, -24.49999193f, 21.85468509f, -11.72180355f, 3.49983534f, -0.44870359f };
+
+float HighPassFilter::process(float x) {
+    // Ecuación de diferencias (Direct Form II)
+    float current_w = x - a[1]*w[1] - a[2]*w[2] - a[3]*w[3] - a[4]*w[4] - a[5]*w[5] - a[6]*w[6] - a[7]*w[7];
+    
+    float y = b[0]*current_w + b[1]*w[1] + b[2]*w[2] + b[3]*w[3] + b[4]*w[4] + b[5]*w[5] + b[6]*w[6] + b[7]*w[7];
+
+    // Desplazar estados (mantenimiento del buffer)
+    for(int i = 7; i > 1; i--) {
+        w[i] = w[i-1];
+    }
+    w[1] = current_w;
+
+    return y;
+}
+
+void HighPassFilter::processArray(float* data, int len) {
+    for(int i = 0; i < len; i++) {
+        data[i] = process(data[i]);
+    }
+}
+
+void HighPassFilter::reset() {
+    for(int i = 0; i < 8; i++) {
+        w[i] = 0.0f;
+    }
+}
+
+
+const float BandPassFilter::b[13] = { 0.017385727403559214, 0.0, -0.10431436442135528, 0.0, 0.2607859110533882, 0.0, -0.3477145480711843, 0.0, 0.2607859110533882, 0.0, -0.10431436442135528, 0.0, 0.017385727403559214 };
+const float BandPassFilter::a[13] = { 1.0, -5.605388986184154, 14.267909254449279, -22.56210489068331, 25.701855963278657, -22.66033567899688, 15.62648218865623, -8.325849995057787, 3.4285001999730036, -1.0804031979900046, 0.23854575710321907, -0.03174939252338663, 0.0025810369570774478 }; 
+
+float BandPassFilter::process(float x) {
+    // Ecuación de diferencias (Direct Form II)
+    float current_w = x - a[1]*w[1] - a[2]*w[2] - a[3]*w[3] - a[4]*w[4] - a[5]*w[5] - a[6]*w[6] - a[7]*w[7];
+    
+    float y = b[0]*current_w + b[1]*w[1] + b[2]*w[2] + b[3]*w[3] + b[4]*w[4] + b[5]*w[5] + b[6]*w[6] + b[7]*w[7];
+
+    // Desplazar estados (mantenimiento del buffer)
+    for(int i = 13; i > 1; i--) {
+        w[i] = w[i-1];
+    }
+    w[1] = current_w;
+
+    return y;
+}
+
+void BandPassFilter::processArray(float* data, int len) {
+    for(int i = 0; i < len; i++) {
+        data[i] = process(data[i]);
+    }
+}
+
+void BandPassFilter::reset() {
+    for(int i = 0; i < 13; i++) {
+        w[i] = 0.0f;
+    }
+}
+
+
+HighPassFilter highPass;
+BandPassFilter bandPass;
+
+
+
+void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
     unsigned long startTime = millis();
     Serial.println("Comenzando preprocesamiento...");
-    int windows = 2;
+    int windows = 1;
     int window_len = TOTAL_SAMPLES/windows;
 
     for (int i=0; i<windows; i++){
         // Copiar datos de la ventana original
-        float* window_pointer = data + (i*window_len);
+        window_pointer = window_pointer + (i*window_len);
 
         // 1. Quitar offset y normalizar base
         remove_dc_offset(window_pointer, window_len);
         normalize_audio(window_pointer, window_len);
         
-        /*
+        
         // 2. Skip inicial (reducimos el puntero, no copiamos)
         int skip = len / 15;
-        int working_len = len - skip;
+        window_pointer += skip;
+        working_len = len - skip;
         // Movemos los datos hacia adelante para sobreescribir el 'skip'
-        std::memmove(window_pointer, data + skip, window_len * sizeof(float));
-        */
+        //std::memmove(window_pointer, data + skip, window_len * sizeof(float));
+        
 
         // 3. Filtros (Ahora no consumen RAM extra)
-        audio_blur(window_pointer, window_len, 13);
-        median_filter(window_pointer, window_len, 11);
+        audio_blur(window_pointer, working_len, 13);
+        gaussian_blur(window_pointer, working_len);
+        median_filter(window_pointer, working_len, 11);
         
-        apply_bandpass(window_pointer, window_len, SAMPLE_RATE, 320.0f, 3000.0f);
+        apply_bandpass(window_pointer, working_len, SAMPLE_RATE, 320.0f, 3000.0f);
+        skip = len / 32;
+        window_pointer += skip;
+        working_len = len - skip - len/1024;
+
+        highPass.processArray(window_pointer, working_len);
+        //normalize_audio(window_pointer, window_len);
     }
     Serial.printf(">>> Preprocesamiento finalizado. Tiempo total: %lu ms\n", millis() - startTime);
 }

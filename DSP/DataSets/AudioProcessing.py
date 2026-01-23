@@ -21,6 +21,8 @@ def bandpass_filter(data, lowcut, highcut, fs, order=5):
     low = lowcut / nyquist
     high = highcut / nyquist
     b, a = butter(order, [low, high], btype='band')
+    print("float b_coefs[] = {", ", ".join(map(str, b)), "};")
+    print("float a_coefs[] = {", ", ".join(map(str, a)), "};")
     y = lfilter(b, a, data)
     return y
 
@@ -52,6 +54,8 @@ def highpass_filter(data, cutoff, fs, order=5):
     
     # btype='bandstop' es la clave aquí
     b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    #print("float b_coefs[] = {", ", ".join(map(str, b)), "};")
+    #print("float a_coefs[] = {", ", ".join(map(str, a)), "};")
     y = lfilter(b, a, data)
     return y
     
@@ -140,10 +144,11 @@ def plot_frequency_spectrum(data, fs, title="Espectro de Frecuencia"):
     plt.show()
 
 
-def gaussian_blur(data, window_size=7):
+def gaussian_blur(data, window_size=15):
     # Creamos una ventana de suavizado suave (tipo campana)
     window = np.hamming(window_size)
     window /= window.sum()
+    print(window)
     
     # Aplicamos la convolución
     data_suave = np.convolve(data, window, mode='same')
@@ -298,7 +303,7 @@ def process_audio_wav(wav_path, output_path=None, plot=False):
 if __name__ == "__main__":
     wav_file = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/RawAudio_TestSet_Augmented/luzCalida_9_aug_4.wav"
     output_path = "/home/pablo_kevin/Projects/LightVoiceController/DSP/DataSets/ProcessedAudio/"
-    process_audio_wav(wav_file, output_path, plot=True)
+    #process_audio_wav(wav_file, output_path, plot=True)
     CLASS_MAP = {
                 "ambiente": 0,
                 "apagarLuz": 1,
@@ -313,3 +318,7 @@ if __name__ == "__main__":
             }
     #for class_name in CLASS_MAP.keys():
     #    plot_multiple_signals(class_name)
+
+    #gaussian_blur([1,1,1])
+    #highpass_filter([1,1,1], 340.0, 12000, order=7)
+    bandpass_filter([1,1,1], 320.0, 3000.0, 12000, order=6)

@@ -5,14 +5,14 @@ const int kTensorArenaSize = 70 * 1024;
 const float mean = -50.281225f;
 const float std_ = 159.534246f;
 
-// Definición de variables globales (Aquí se les asigna memoria)
-alignas(16) uint8_t tensor_arena[kTensorArenaSize];
-const tflite::Model* model = nullptr;
-tflite::MicroInterpreter* interpreter = nullptr;
-TfLiteTensor* input = nullptr;
-TfLiteTensor* output = nullptr;
-
 bool setup_MLmodel(){
+    // Definición de variables globales (Aquí se les asigna memoria)
+    alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+    const tflite::Model* model = nullptr;
+    tflite::MicroInterpreter* interpreter = nullptr;
+    TfLiteTensor* input = nullptr;
+    TfLiteTensor* output = nullptr;
+
     tflite::InitializeTarget();
 
     // 2. Load Model

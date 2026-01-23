@@ -12,7 +12,7 @@
 #define MFCC_MEAN -47.3197508271f
 #define MFCC_STD 174.8682650662f
 
-
+extern int working_len;
 
 class AudioProcessor {
 public:
@@ -20,9 +20,68 @@ public:
     void normalize_audio(float* data, int len);
     void remove_dc_offset(float* data, int len);
     void audio_blur(float* data, int len, int kernel_size);
+    void gaussian_blur(float* data, int len);
     void median_filter(float* data, int len, int kernel_size);
     void process_complete_pipeline(float* audio, int len);
     void apply_bandpass(float* data, int len, float fs, float lf_cut, float hf_cut);
 };
 
 void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output);
+
+
+class HighPassFilter {
+private:
+    // Coeficientes constantes para evitar modificaciones accidentales
+    // Usamos 'static const' para que no ocupen RAM por cada instancia de la clase
+    static const float b[8];
+    static const float a[8];
+    
+    float w[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // Buffer de estados (delay line)
+
+public:
+    HighPassFilter() {reset();}
+
+    /**
+     * Procesa una sola muestra usando Direct Form II
+     */
+    float process(float x);
+
+    /**
+     * Procesa un array completo de muestras
+     */
+    void processArray(float* data, int len);
+
+    /**
+     * Limpia el historial del filtro para evitar ruidos al reiniciar grabaciones
+     */
+    void reset();
+};
+
+
+class BandPassFilter {
+private:
+    // Coeficientes constantes para evitar modificaciones accidentales
+    // Usamos 'static const' para que no ocupen RAM por cada instancia de la clase
+    static const float b[13];
+    static const float a[13];
+    
+    float w[13] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0 , 0, 0, 0}; // Buffer de estados (delay line)
+
+public:
+    BandPassFilter() {reset();}
+
+    /**
+     * Procesa una sola muestra usando Direct Form II
+     */
+    float process(float x);
+
+    /**
+     * Procesa un array completo de muestras
+     */
+    void processArray(float* data, int len);
+
+    /**
+     * Limpia el historial del filtro para evitar ruidos al reiniciar grabaciones
+     */
+    void reset();
+};

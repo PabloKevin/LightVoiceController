@@ -15,9 +15,13 @@ TaskHandle_t AudioProccessing_task;
 
 bool start_recording = false;
 bool copying = false;
+bool isRecording = false;
 
 void code_AudioRecording(void * parameter);
 void code_AudioProccessing(void * parameter);
+
+QueueHandle_t audioQueue = xQueueCreate(1, sizeof(float*));
+
 
 void setup() {
     Serial.begin(115200);
@@ -26,9 +30,10 @@ void setup() {
     if (!setup_AudioRecording()){
         Serial.println("Error during AudioRecording setup");
     }
-    if (!setup_MLmodel()){
-        Serial.println("Error during ML model setup");
-    }
+    
+    //if (!setup_MLmodel()){
+    //    Serial.println("Error during ML model setup");
+    //}
 
     // Crear Tarea 1: Grabación (En el Núcleo 0)
     xTaskCreatePinnedToCore(
@@ -62,18 +67,14 @@ void code_AudioRecording(void * parameter){
         if (Serial.available() > 0) {
             char c = Serial.read();
             if (c == 'g') {
-                start_recording = true;
-                for (int i=10; i<1; i++){
-                    isRecording = true;
-                    digitalWrite(LED_BUILTIN, HIGH);
-                    recordAudio();
-                    digitalWrite(LED_BUILTIN, LOW);
-                    isRecording = false;
-                    while(copying){
-                        vTaskDelay(pdMS_TO_TICKS(5));
-                    }
-                }
-                start_recording=false;
+                float* audioBuffer = new float[TOTAL_SAMPLES];
+                isRecording = true;
+                digitalWrite(LED_BUILTIN, HIGH);
+                recordAudio(audioBuffer);
+                digitalWrite(LED_BUILTIN, LOW);
+                isRecording = false;
+                copying=true;
+                xQueueSend(audioQueue, &audioBuffer, portMAX_DELAY); // Enviar dirección
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -82,15 +83,17 @@ void code_AudioRecording(void * parameter){
 
 void code_AudioProccessing(void * parameter){
     for(;;) {
-        if (start_recording && isRecording){
-            copying = true;
-            if (!isRecording){
-                std::memcpy(processedBuffer, audioBuffer, TOTAL_SAMPLES);
+        float* audioBuffer;
+        if (xQueueReceive(audioQueue, &audioBuffer, portMAX_DELAY)) {
+            if (copying && !isRecording){
                 copying = false;
+                processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
+                playBackSerial(audioBuffer, working_len);
             }
-            processor.process_complete_pipeline(processedBuffer, TOTAL_SAMPLES);
-            playBackSerial();
+            delete[] audioBuffer; // LIBERAR RAM AQUÍ
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    float* frameRecibido;
+    
 }
