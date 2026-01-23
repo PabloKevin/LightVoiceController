@@ -32,7 +32,7 @@ def extract_features(file_path, windows=64):
         print(f"Error procesando {file_path}: {e}")
         return None
     
-def extract_fft_features(file_path, n_fft=256, hop_length=128, target_frames=64):
+def extract_stft_features(file_path, n_fft=256, hop_length=128, target_frames=64):
     """
     Carga un audio y calcula la magnitud de la STFT (FFT en el tiempo).
     n_fft: Tamaño de la ventana (determina la resolución en frecuencia).

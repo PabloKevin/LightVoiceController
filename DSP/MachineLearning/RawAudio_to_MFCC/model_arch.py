@@ -5,41 +5,43 @@ import numpy as np
 
 def build_model(input_shape, output_shape):
     model = models.Sequential([
-        # 1. Capa de entrada
+        # --- ENCODER ---
         layers.Input(shape=input_shape),
+        # Extrae características y reduce el ruido
+        layers.Conv1D(32, kernel_size=11, activation='leaky_relu', padding='same'),
+        layers.MaxPooling1D(2),
+        layers.Dropout(0.2),
+        layers.Conv1D(64, kernel_size=7, activation='relu', padding='same'),
+        layers.MaxPooling1D(5), # Reducción fuerte para captar la forma global
+        layers.Dropout(0.2),
         
-        # 2. (Opcional) Una Conv1D para reducir la carga de la LSTM
-        # Ayuda a extraer rasgos locales antes de pasar a la memoria temporal
-        #layers.Conv1D(filters=32, kernel_size=5, strides=2, activation='relu', padding='same'),
-        #layers.MaxPooling1D(pool_size=2),
-        #layers.Conv1D(filters=64, kernel_size=5, strides=2, activation='relu', padding='same'),
+        # --- BOTTLENECK ---
+        layers.Conv1D(128, kernel_size=3, activation='leaky_relu', padding='same'),
         
-        # 3. Capa LSTM
-        # 'units=64' es un buen balance entre poder y memoria para el ESP32
-        # return_sequences=False porque solo queremos la predicción final del frame
-        layers.LSTM(units=128, return_sequences=False),
+        # --- DECODER ---
+        # Reconstruye la señal a su tamaño original
+        layers.UpSampling1D(5),
+        layers.Conv1D(64, kernel_size=7, activation='relu', padding='same'),
+        layers.Dropout(0.2),
+        layers.UpSampling1D(2),
+        layers.Conv1D(32, kernel_size=11, activation='leaky_relu', padding='same'),
+        layers.Dropout(0.2),
         
-        # 4. Capas Densas para mapear la memoria a los coeficientes
-        layers.Dense(64, activation='relu'),
-        layers.Dropout(0.2), # Ayuda a evitar que el modelo memorice ruidos
-        layers.Dense(256, activation='relu'),
-        layers.Dropout(0.2), # Ayuda a evitar que el modelo memorice ruidos
-        layers.Dense(512, activation='relu'),
-        layers.Dropout(0.2), # Ayuda a evitar que el modelo memorice ruidos
-        
-        # 5. Salida (13 coeficientes MFCC)
-        layers.Dense(output_shape, activation='linear')
+        # --- SALIDA ---
+        # 1 filtro para reconstruir la onda mono
+        layers.Conv1D(1, kernel_size=3, activation='linear', padding='same'),
+        layers.Flatten(),
+        layers.Dense(output_shape)
     ])
-    
 
     # El valor por defecto de Adam es 0.001
     opt = optimizers.Adam(
-        learning_rate=0.001, 
-        beta_1=0.9, 
-        beta_2=0.999, 
-        epsilon=1e-07
+        learning_rate=0.004, 
+        beta_1=0.8, 
+        beta_2=0.9, 
+        epsilon=1e-06
     )
-    model.compile(optimizer=opt, loss='log_cosh', metrics=['mae'])
+    model.compile(optimizer=opt, loss='mse', metrics=['mae'])
     return model
 
 class voiceModelNN():

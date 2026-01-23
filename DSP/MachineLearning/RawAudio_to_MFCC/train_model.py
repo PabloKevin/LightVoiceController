@@ -20,13 +20,22 @@ if __name__ == "__main__":
     X = np.load(os.path.join(data_path, "X_train.npy"))
     y = np.load(os.path.join(data_path, "Y_train.npy"))
 
-    mean_XTrain = 0.8719726204872131
+    """mean_XTrain = 0.8719726204872131
     std_XTrain = 0.179367333650589
     X = (X - mean_XTrain) / std_XTrain
 
     mean_yTrain = 9.795799596756644e-10
     std_yTrain = 0.0014433130028423165
-    y = (y - mean_yTrain) / std_yTrain
+    y = (y - mean_yTrain) / std_yTrain"""
+
+    Xmean=0.8719726204872131 
+    Xstd=0.179367333650589
+    X = (X - Xmean) / Xstd
+    
+    Ymean=9.795799596756644e-10 
+    Ystd=0.0014433130028423165
+    y = (y - Ymean) / Ystd
+
 
     # --- 3. Entrenamiento ---
     input_shape = (375*2, 1)
@@ -35,13 +44,13 @@ if __name__ == "__main__":
     
     # Entrenar por un número fijo de épocas 
     # (Usa el número de épocas donde viste que el modelo convergía en tus pruebas previas)
-    EPOCHS = 30
+    EPOCHS = 100
     
     print(f"\n🚀 Entrenando durante {EPOCHS} épocas...")
     history = model.fit(
         X, y,
         epochs=EPOCHS,
-        batch_size=128,
+        batch_size=256,
         verbose=1,
         # Callback para reducir el LR si la pérdida de entrenamiento se estanca
         callbacks=[

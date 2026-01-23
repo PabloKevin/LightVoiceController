@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import librosa.display
 from seaborn import boxplot
 from AudioProcessing import process_audio_wav
+from scipy.fft import fft
 
 def map_Raw2MFCC(dataset = "Train", windows=64, save=False):
     dir = f"RawAudio_{dataset}Set_Augmented/"
@@ -22,8 +23,8 @@ def map_Raw2MFCC(dataset = "Train", windows=64, save=False):
             X.append(rawAudio[i])
             Y.append(mfcc[i])
 
-    X = np.array(X)
-    Y = np.array(Y)
+    X = np.array(fft(X))
+    Y = np.array(fft(Y))
 
     if save:
         np.save(f"RawAudio2MFCC/X_{dataset.lower()}.npy", X)
@@ -81,20 +82,28 @@ def processed2windows(processedAudio, windows=64):
 
 if __name__ == "__main__":
     #X, Y = map_Raw2MFCC(dataset="Test", windows=64, save=False)
-    X, Y = map_Raw2Processed(dataset="Train", windows=32, save=True)
+    X, Y = map_Raw2Processed(dataset="Test", windows=32, save=True)
     print(f"X shape: {X.shape}, Y shape: {Y.shape}")
-    print(f"Xmean={np.mean(X)}, Xstd={np.std(X)}")
-    print(f"Ymean={np.mean(Y)}, Ystd={np.std(Y)}")
+    print(f"Xmean={np.mean(X)}\nXstd={np.std(X)}")
+    print(f"Ymean={np.mean(Y)}\nYstd={np.std(Y)}")
     # Supongamos que X_train tiene forma (num_muestras, 375)
 
-    """plt.figure(figsize=(12, 6))
+    """
+    plt.figure(figsize=(12, 6))
     boxplot(data=Y[0])
     plt.title('Distribución de todos los Coeficientes MFCC')
     plt.ylabel('Amplitud')
     plt.xlabel('Índice del Coeficiente')
     plt.xticks(rotation=45)
-    plt.show()"""
+    plt.show()
 
+    plt.plot(X[0])
+    plt.show()
+
+    plt.plot(Y[0])
+    plt.show()
+    """
+    
 
 
 
