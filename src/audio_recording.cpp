@@ -1,4 +1,5 @@
 #include "audio_recording.h"
+#include "audio_preProcessing.h"
 
 // Reservamos el buffer en la memoria del ESP32
 
@@ -41,7 +42,7 @@ bool recordAudio(float* audioBuffer) {
 // Función para enviar los datos al Serial y graficarlos (Serial Plotter)
 void playBackSerial(float* audioBuffer, int len) {
     Serial.println("Enviando datos de audio al monitor...");
-    for (int i = 0; i < TOTAL_SAMPLES; i++) {
+    for (int i = 0; i < working_len; i++) {
         Serial.println((int)(audioBuffer[i]*32767.0f)); //*32767
         // delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
     }

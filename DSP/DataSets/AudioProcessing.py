@@ -21,8 +21,13 @@ def bandpass_filter(data, lowcut, highcut, fs, order=5):
     low = lowcut / nyquist
     high = highcut / nyquist
     b, a = butter(order, [low, high], btype='band')
-    print("float b_coefs[] = {", ", ".join(map(str, b)), "};")
-    print("float a_coefs[] = {", ", ".join(map(str, a)), "};")
+    # 'sos' devuelve una matriz de [N_secciones, 6]
+    sos = butter(6, [low, high], btype='band', output='sos')
+
+    print("const float sos[6][6] = {")
+    for section in sos:
+        print("    {" + ", ".join([f"{x}f" for x in section]) + "},")
+    print("};")
     y = lfilter(b, a, data)
     return y
 

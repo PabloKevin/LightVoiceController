@@ -20,12 +20,14 @@ bool isRecording = false;
 void code_AudioRecording(void * parameter);
 void code_AudioProccessing(void * parameter);
 
-QueueHandle_t audioQueue = xQueueCreate(1, sizeof(float*));
+QueueHandle_t audioQueue = NULL;
 
 
 void setup() {
     Serial.begin(115200);
     Serial.setTimeout(2000);
+
+    audioQueue = xQueueCreate(1, sizeof(float*));
 
     if (!setup_AudioRecording()){
         Serial.println("Error during AudioRecording setup");
@@ -84,16 +86,16 @@ void code_AudioRecording(void * parameter){
 void code_AudioProccessing(void * parameter){
     for(;;) {
         float* audioBuffer;
-        if (xQueueReceive(audioQueue, &audioBuffer, portMAX_DELAY)) {
-            if (copying && !isRecording){
-                copying = false;
-                processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
-                playBackSerial(audioBuffer, working_len);
+        if (audioQueue != NULL) {
+            if (xQueueReceive(audioQueue, &audioBuffer, portMAX_DELAY)) {
+                if (copying && !isRecording){
+                    copying = false;
+                    processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
+                    playBackSerial(audioBuffer, working_len);
+                }
+                delete[] audioBuffer; // LIBERAR RAM AQUÍ
             }
-            delete[] audioBuffer; // LIBERAR RAM AQUÍ
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    float* frameRecibido;
-    
 }

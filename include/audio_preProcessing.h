@@ -39,7 +39,7 @@ private:
     float w[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // Buffer de estados (delay line)
 
 public:
-    HighPassFilter() {reset();}
+    HighPassFilter();
 
     /**
      * Procesa una sola muestra usando Direct Form II
@@ -50,11 +50,6 @@ public:
      * Procesa un array completo de muestras
      */
     void processArray(float* data, int len);
-
-    /**
-     * Limpia el historial del filtro para evitar ruidos al reiniciar grabaciones
-     */
-    void reset();
 };
 
 
@@ -62,13 +57,12 @@ class BandPassFilter {
 private:
     // Coeficientes constantes para evitar modificaciones accidentales
     // Usamos 'static const' para que no ocupen RAM por cada instancia de la clase
-    static const float b[13];
-    static const float a[13];
+    static const float sos[6][6];
     
-    float w[13] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0 , 0, 0, 0}; // Buffer de estados (delay line)
+    float w[6][2];// Buffer de estados (delay line)
 
 public:
-    BandPassFilter() {reset();}
+    BandPassFilter();
 
     /**
      * Procesa una sola muestra usando Direct Form II
@@ -79,9 +73,4 @@ public:
      * Procesa un array completo de muestras
      */
     void processArray(float* data, int len);
-
-    /**
-     * Limpia el historial del filtro para evitar ruidos al reiniciar grabaciones
-     */
-    void reset();
 };

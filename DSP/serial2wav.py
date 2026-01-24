@@ -44,7 +44,7 @@ def main():
         audio_data = []
         count = 0
         line = ""
-        while count < SAMPLES_TO_READ or "Finish" in line:
+        while count < SAMPLES_TO_READ and line!="Finish":
             line = ser.readline().decode('ascii', errors='ignore').strip()
             
             try:
