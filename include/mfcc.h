@@ -1,70 +1,38 @@
-#pragma once
+#ifndef MFCC_H
+#define MFCC_H
 
+#include <Arduino.h>
 #include <vector>
-#include <cmath>
+#include "esp_dsp.h"
+#include "mel_data.h" // Este es el archivo generado por el script de arriba
+#include <stdint.h>
 
-// --- MFCC Configuration ---
-#define N_MFCC 13           // Number of MFCC coefficients
-#define N_FFT 512           // FFT size
-#define HOP_LENGTH 160      // Samples between successive frames (12000/75 ≈ 160)
-#define N_MELS 40           // Number of mel bands (typically 40 for speech)
-#define F_MIN 0.0f          // Minimum frequency in Hz
-#define F_MAX 6000.0f       // Maximum frequency in Hz (half of SAMPLE_RATE)
-
-/**
- * MFCC (Mel-Frequency Cepstral Coefficients) Extractor
- * 
- * Matches librosa.feature.mfcc(y=y, sr=12000, n_mfcc=13)
- * Output shape: (13, num_frames) where num_frames ≈ 64 for 2-second audio
- */
 class MFCCExtractor {
 private:
-    // Pre-computed mel filterbank and other matrices
-    std::vector<std::vector<float>> mel_filterbank;
-    std::vector<float> dct_matrix;  // Discrete Cosine Transform matrix
-    
-    // Temporary buffers
-    std::vector<float> fft_real;
-    std::vector<float> fft_imag;
-    std::vector<float> magnitude;
-    std::vector<float> mel_spectrogram;
-    
-    // FFT computation
-    void compute_fft(const float* input, int size);
-    void apply_window(float* signal, int size);
-    void mel_scale(float* magnitude, int fft_bins, float* mel_output);
-    
+    // Configuración coincidente con entrenamiento
+    static const int N_MFCC = 13;
+    static const int N_FFT = 512;
+    static const int HOP_LENGTH = 256;
+    static const int TARGET_WINDOWS = 64;
+
+    // Constantes de normalización (AJUSTAR CON TUS VALORES DE PYTHON)
+    const float MFCC_MEAN = -15.0f; 
+    const float MFCC_STD = 25.0f;
+
+    float* window;
+    float* fft_buffer;
+
 public:
     MFCCExtractor();
+    ~MFCCExtractor();
     
     /**
-     * Extract MFCC features from audio
-     * Input: raw audio (float array)
-     * Output: MFCC matrix (N_MFCC x num_frames)
-     * 
-     * Returns the number of frames (time steps) extracted
+     * @brief Extrae MFCCs y los formatea para el modelo de ML
+     * @param audio Buffer de audio (float)
+     * @param audio_len Longitud del audio
+     * @param mfcc_output Buffer de salida de tamaño 13*64 (832 floats)
      */
-    int extract_mfcc(const float* audio, int audio_len, 
-                     float* mfcc_output, int max_frames);
-    
-    /**
-     * Pad or truncate MFCC to fixed size (64 frames)
-     */
-    void pad_to_fixed_length(float* mfcc, int num_frames, 
-                            float* mfcc_padded, int target_frames);
-    
-    /**
-     * Normalize MFCC using global mean and std
-     * Equivalent to: (X - MFCC_MEAN) / (MFCC_STD + 1e-8)
-     */
-    void normalize_mfcc(float* mfcc, int num_coeffs, int num_frames);
-    
-private:
-    // Helper functions
-    float hz_to_mel(float hz);
-    float mel_to_hz(float mel);
-    void create_mel_filterbank();
-    void create_dct_matrix();
-    void radix2_fft(float* real, float* imag, int size);
+    int extract_mfcc(const float* audio, int audio_len, float* mfcc_output);
 };
 
+#endif

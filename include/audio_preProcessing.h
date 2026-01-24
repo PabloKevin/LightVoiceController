@@ -8,10 +8,6 @@
 #include <algorithm>
 #include <cstring>
 
-// Parámetros de normalización (de tu entrenamiento)
-#define MFCC_MEAN -47.3197508271f
-#define MFCC_STD 174.8682650662f
-
 extern int working_len;
 
 class AudioProcessor {

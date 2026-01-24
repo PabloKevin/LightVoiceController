@@ -28,3 +28,4 @@ extern TfLiteTensor* output;
 // Declaración de funciones (solo la firma)
 bool setup_MLmodel();
 int predict(float* inputBuff_pointer);
+void free_MLmodel();

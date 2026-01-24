@@ -3,6 +3,7 @@
 #include "model.h"
 #include "audio_recording.h"
 #include "audio_preProcessing.h"
+#include "mfcc.h"
 
 // --- Configuration ---
 #define potentionmeterPin 35
@@ -12,6 +13,7 @@ AudioProcessor processor;
 // Handlers para las tareas (opcional, sirve para controlarlas luego)
 TaskHandle_t AudioRecording_task;
 TaskHandle_t AudioProccessing_task;
+TaskHandle_t Prediction_task;
 
 bool start_recording = false;
 bool copying = false;
@@ -19,15 +21,17 @@ bool isRecording = false;
 
 void code_AudioRecording(void * parameter);
 void code_AudioProccessing(void * parameter);
+void code_Prediction(void * parameter);
 
 QueueHandle_t audioQueue = NULL;
-
+QueueHandle_t inputQueue = NULL;
 
 void setup() {
     Serial.begin(115200);
     Serial.setTimeout(2000);
 
     audioQueue = xQueueCreate(1, sizeof(float*));
+    inputQueue = xQueueCreate(1, sizeof(float*));
 
     if (!setup_AudioRecording()){
         Serial.println("Error during AudioRecording setup");
@@ -51,12 +55,20 @@ void setup() {
     xTaskCreatePinnedToCore(
         code_AudioProccessing,
         "TareaProcesamiento",
-        10000,
+        12000,
         NULL,
         1,
         &AudioProccessing_task,
+        0);                 /* <--- NÚCLEO 1 */
+    // Crear Tarea 2: Procesamiento (En el Núcleo 1)
+    xTaskCreatePinnedToCore(
+        code_Prediction,
+        "TareaPrediccion",
+        5000,
+        NULL,
+        1,
+        &Prediction_task,
         1);                 /* <--- NÚCLEO 1 */
-    
 }
 
 void loop() {
@@ -79,23 +91,47 @@ void code_AudioRecording(void * parameter){
                 xQueueSend(audioQueue, &audioBuffer, portMAX_DELAY); // Enviar dirección
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
 void code_AudioProccessing(void * parameter){
     for(;;) {
         float* audioBuffer;
+        bool flagPredict = true;
         if (audioQueue != NULL) {
             if (xQueueReceive(audioQueue, &audioBuffer, portMAX_DELAY)) {
                 if (copying && !isRecording){
                     copying = false;
                     processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
-                    playBackSerial(audioBuffer, working_len);
+
+                    float* input_MFCC = new float[13*64];
+                    MFCCExtractor mfcc;
+                    mfcc.extract_mfcc(audioBuffer, working_len, input_MFCC);
+                    Serial.println("MFCC extaridos correctamente");
+                    delete[] audioBuffer; // LIBERAR RAM AQUÍ
+                    xQueueSend(inputQueue, &input_MFCC, portMAX_DELAY);
+                    //playBackSerial(audioBuffer, working_len);
                 }
-                delete[] audioBuffer; // LIBERAR RAM AQUÍ
             }
-            vTaskDelay(pdMS_TO_TICKS(10));
         }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+
+void code_Prediction(void * parameter){
+    for(;;) {
+        float* input_MFCC;
+        if (inputQueue != NULL) {
+            if (xQueueReceive(inputQueue, &input_MFCC, portMAX_DELAY)) {
+                if (!setup_MLmodel()){
+                    Serial.println("Error during ML model setup");
+                }
+                int action = predict(input_MFCC);
+                free_MLmodel();
+                delete[] input_MFCC;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

@@ -1,55 +1,63 @@
 #include "model.h"
 
 // Definición de constantes
-const int kTensorArenaSize = 70 * 1024;
 const float mean = -50.281225f;
 const float std_ = 159.534246f;
 
-bool setup_MLmodel(){
-    // Definición de variables globales (Aquí se les asigna memoria)
-    alignas(16) uint8_t tensor_arena[kTensorArenaSize];
-    const tflite::Model* model = nullptr;
-    tflite::MicroInterpreter* interpreter = nullptr;
-    TfLiteTensor* input = nullptr;
-    TfLiteTensor* output = nullptr;
+// Ya no definimos el array aquí, solo el puntero
+uint8_t* tensor_arena = nullptr; 
+const int kTensorArenaSize = 70 * 1024; // Un poco de margen
+
+// Punteros globales
+const tflite::Model* model = nullptr;
+tflite::MicroInterpreter* interpreter = nullptr;
+TfLiteTensor* input = nullptr;
+TfLiteTensor* output = nullptr;
+
+bool setup_MLmodel() {
+    // 1. Pedir memoria dinámicamente
+    if (tensor_arena == nullptr) {
+        // Usamos MALLOC_CAP_INTERNAL para asegurar que sea RAM rápida
+        tensor_arena = (uint8_t*)heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+        if (tensor_arena == nullptr) {
+            Serial.println("¡Error! No hay RAM para el Tensor Arena");
+            return false;
+        }
+    }
 
     tflite::InitializeTarget();
+    model = tflite::GetModel(voiceModel_3classes_tflite);
 
-    // 2. Load Model
-    model = tflite::GetModel(voiceModel_3classes_tflite); 
-    if (model->version() != TFLITE_SCHEMA_VERSION) {
-        MicroPrintf("Model version mismatch!");
-        return 0;
-    }
-
-    // 3. Register Operations
-    // Note: If you get "Did you use the wrong OpResolver?" errors, 
-    // add the missing ops here (e.g., op_resolver.AddConv2D()).
     static tflite::AllOpsResolver op_resolver;
-    //op_resolver.AddFullyConnected();
-    //op_resolver.AddSoftmax();
-    //op_resolver.AddReshape(); // Common for (13, 14, 1) inputs
-
-    // 4. Instantiate Interpreter
     static tflite::MicroErrorReporter micro_error_reporter;
-    tflite::ErrorReporter* error_reporter = &micro_error_reporter;
-    
-    static tflite::MicroInterpreter static_interpreter(
-        model, op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
-    interpreter = &static_interpreter;
 
-    // 5. Allocate Tensors
+    // El intérprete también debe ser dinámico para poder borrarlo
+    if (interpreter != nullptr) delete interpreter;
+    
+    interpreter = new tflite::MicroInterpreter(
+        model, op_resolver, tensor_arena, kTensorArenaSize, &micro_error_reporter);
+
     if (interpreter->AllocateTensors() != kTfLiteOk) {
-        MicroPrintf("AllocateTensors() failed!");
-        return 0;
+        Serial.println("Error en AllocateTensors");
+        return false;
     }
 
-    // 6. Assign input/output pointers
     input = interpreter->input(0);
     output = interpreter->output(0);
+    return true;
+}
 
-    Serial.println("Model Initialized Successfully");
-    return 1;
+// Nueva función para liberar TODO
+void free_MLmodel() {
+    if (interpreter != nullptr) {
+        delete interpreter;
+        interpreter = nullptr;
+    }
+    if (tensor_arena != nullptr) {
+        heap_caps_free(tensor_arena);
+        tensor_arena = nullptr;
+    }
+    Serial.println("Memoria de ML liberada.");
 }
 
 

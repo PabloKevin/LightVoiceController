@@ -31,6 +31,35 @@ def extract_features(file_path, windows=64):
     except Exception as e:
         print(f"Error procesando {file_path}: {e}")
         return None
+
+def print_MEL_coef():
+    FS = 12000
+    N_FFT = 512
+    N_MELS = 13
+
+    mel_basis = librosa.filters.mel(sr=FS, n_fft=N_FFT, n_mels=N_MELS)
+
+    print("#ifndef MEL_DATA_H")
+    print("#define MEL_DATA_H\n")
+    print("#include <pgmspace.h>\n")
+
+    # Guardar los índices de inicio y fin para optimizar el bucle
+    starts = []
+    ends = []
+
+    print(f"const float mel_weights[{N_MELS}][{1 + N_FFT // 2}] PROGMEM = {{")
+    for row in mel_basis:
+        nonzero = np.where(row > 0)[0]
+        starts.append(nonzero[0] if len(nonzero) > 0 else 0)
+        ends.append(nonzero[-1] if len(nonzero) > 0 else 0)
+        items = [f"{x:.8f}f" for x in row]
+        print("    {" + ", ".join(items) + "},")
+    print("};\n")
+
+    print(f"const uint16_t mel_start_bin[{N_MELS}] PROGMEM = {{" + ", ".join(map(str, starts)) + "};")
+    print(f"const uint16_t mel_end_bin[{N_MELS}] PROGMEM = {{" + ", ".join(map(str, ends)) + "};")
+    print("\n#endif")
+
     
 def extract_stft_features(file_path, n_fft=256, hop_length=128, target_frames=64):
     """
@@ -98,4 +127,5 @@ def prepare_dataset():
     print(f"Clases detectadas: {np.unique(y)}")
 
 if __name__ == "__main__":
-    prepare_dataset()
+    #prepare_dataset()
+    print_MEL_coef()
