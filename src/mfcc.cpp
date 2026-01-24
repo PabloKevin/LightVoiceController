@@ -53,8 +53,7 @@ int MFCCExtractor::extract_mfcc(const float* audio, int audio_len, float* mfcc_o
     int num_frames = 0;
     for (int start = 0; start + N_FFT <= audio_len && num_frames < max_frames; start += HOP_LENGTH) {
         compute_fft(audio + start, N_FFT);
-        // Aquí deberías aplicar tu banco de filtros Mel y DCT 
-        // simplificado para obtener los 13 coeficientes.
+
         num_frames++;
     }
     return num_frames;

@@ -98,8 +98,175 @@ void AudioProcessor::median_filter(float* data, int len, int kernel_size) {
     delete[] temp_output;
 }
 
+float* AudioProcessor::kill_peaks(float* audio, int len, int windows, float min_data, float threshold, int trials) {
+    int samplesW = len / windows;
+    int trial = 0;
+    float current_threshold = threshold;
 
+    // Buffer para marcar qué ventanas sobreviven (1 = vive, 0 = silenciada)
+    bool* mask = new bool[windows];
+    
+    while (trial <= trials) {
+        int kept_samples = 0;
 
+        for (int w = 0; w < windows; w++) {
+            int start_idx = w * samplesW;
+            float max_sq = 0;
+            float sum_sq = 0;
+
+            // Calcular potencia máxima y promedio de la ventana
+            for (int i = 0; i < samplesW; i++) {
+                float val_sq = audio[start_idx + i] * audio[start_idx + i];
+                if (val_sq > max_sq) max_sq = val_sq;
+                sum_sq += val_sq;
+            }
+
+            float mean_sq = sum_sq / samplesW;
+
+            // Lógica de detección de picos (Evitar división por cero)
+            if (mean_sq > 0 && max_sq > (current_threshold * mean_sq)) {
+                mask[w] = false; // Marcar para borrar
+            } else {
+                mask[w] = true;  // Marcar para mantener
+                kept_samples += samplesW;
+            }
+        }
+
+        // Condición de salida: ¿Mantuvimos suficiente audio?
+        if (kept_samples >= len * min_data) {
+            break;
+        } else {
+            current_threshold *= 0.7f; // Relajar el umbral
+            trial++;
+        }
+    }
+
+    // Si fallan todos los intentos, devolvemos el audio original (no se borra nada)
+    if (trial > trials) {
+        Serial.println("KillPeaks: Máximos intentos alcanzados, devolviendo audio original.");
+        working_len = len;
+        delete[] mask;
+        return audio;
+    }
+
+    // Aplicar la máscara y reconstruir el audio (In-place para ahorrar RAM)
+    // Nota: A diferencia de Python que concatena, aquí silenciamos o desplazamos.
+    // Para mantener la lógica de "concatenate", vamos a sobreescribir el buffer original.
+    
+    int write_idx = 0;
+    for (int w = 0; w < windows; w++) {
+        if (mask[w]) {
+            // Si la ventana se mantiene y no es la posición actual, la desplazamos
+            if (write_idx != w * samplesW) {
+                memmove(&audio[write_idx], &audio[w * samplesW], samplesW * sizeof(float));
+            }
+            write_idx += samplesW;
+        }
+    }
+
+    // Actualizamos la longitud global de datos útiles
+    working_len = write_idx;
+
+    delete[] mask;
+    
+    return audio; 
+}
+
+#include "esp_dsp.h" // Librería oficial de procesamiento de señales del ESP32
+
+void AudioProcessor::simple_spectral_subtraction(float* audio, int len, float noise_reduction_factor) {
+    const int fft_size = 512; // Tamaño estándar para STFT
+    const int hop_size = 256; // 50% de solapamiento
+    
+    // Inicializar DSP del ESP32
+    esp_err_t ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
+    if (ret  != ESP_OK) return;
+
+    // Buffers temporales
+    float* window = new float[fft_size];
+    float* noise_estimation = new float[fft_size / 2 + 1];
+    float* fft_buffer = new float[fft_size * 2]; // Complejo (R, I, R, I...)
+    
+    // 1. Crear ventana de Hann
+    dsps_wind_hann_f32(window, fft_size);
+    for(int i=0; i < (fft_size/2+1); i++) noise_estimation[i] = 0;
+
+    // 2. ESTIMACIÓN DE RUIDO (Primeros 4 frames)
+    int noise_frames = 4;
+    for (int f = 0; f < noise_frames; f++) {
+        // Preparar buffer con ventana
+        for (int i = 0; i < fft_size; i++) {
+            fft_buffer[i * 2] = audio[f * hop_size + i] * window[i];
+            fft_buffer[i * 2 + 1] = 0;
+        }
+        dsps_fft2r_fc32(fft_buffer, fft_size);
+        
+        // Acumular magnitud
+        for (int i = 0; i <= fft_size / 2; i++) {
+            float mag = sqrtf(fft_buffer[i*2]*fft_buffer[i*2] + fft_buffer[i*2+1]*fft_buffer[i*2+1]);
+            noise_estimation[i] += mag / noise_frames;
+        }
+    }
+
+    // 3. PROCESAMIENTO POR VENTANAS (Limpieza)
+    // Para simplificar y ahorrar RAM, lo haremos "in-place" sobre el audio original
+    // Nota: El iSTFT es complejo, aquí aplicamos la reducción de ganancia espectral.
+    
+    for (int step = 0; step < len - fft_size; step += hop_size) {
+        // FFT del frame actual
+        for (int i = 0; i < fft_size; i++) {
+            fft_buffer[i * 2] = audio[step + i] * window[i];
+            fft_buffer[i * 2 + 1] = 0;
+        }
+        dsps_fft2r_fc32(fft_buffer, fft_size);
+
+        // Sustracción espectral
+        for (int i = 0; i <= fft_size / 2; i++) {
+            float real = fft_buffer[i * 2];
+            float imag = fft_buffer[i * 2 + 1];
+            float mag = sqrtf(real * real + imag * imag);
+            
+            // Restar ruido con "Spectral Floor" del 1%
+            float new_mag = mag - (noise_reduction_factor * noise_estimation[i]);
+            if (new_mag < 0.01f * mag) new_mag = 0.01f * mag;
+            
+            // Aplicar nueva magnitud manteniendo la fase original
+            float gain = new_mag / (mag + 1e-9f);
+            fft_buffer[i * 2] *= gain;
+            fft_buffer[i * 2 + 1] *= gain;
+            
+            // Simetría para la IFFT
+            if (i > 0 && i < fft_size / 2) {
+                fft_buffer[(fft_size - i) * 2] = fft_buffer[i * 2];
+                fft_buffer[(fft_size - i) * 2 + 1] = -fft_buffer[i * 2 + 1];
+            }
+        }
+
+        // 4. IFFT (Reconstrucción)
+        // Si dsps_ifft2r_fc32 no aparece, usa la lógica de FFT inversa estándar:
+        // 1. Conjugamos el complejo (negamos la parte imaginaria)
+        for (int i = 0; i < fft_size * 2; i += 2) fft_buffer[i + 1] = -fft_buffer[i + 1];
+
+        // 2. Ejecutamos FFT normal
+        dsps_fft2r_fc32(fft_buffer, fft_size);
+
+        // 3. Conjugamos de nuevo y dividimos por N (tamaño de FFT)
+        for (int i = 0; i < fft_size * 2; i++) {
+            fft_buffer[i] = fft_buffer[i] / fft_size;
+        }
+        
+        // Overlap-add (Suma y solapa)
+        for (int i = 0; i < fft_size; i++) {
+            // Re-aplicar ventana para suavizar la unión
+            audio[step + i] = fft_buffer[i * 2] * window[i]; 
+        }
+    }
+
+    // Limpieza
+    delete[] window;
+    delete[] noise_estimation;
+    delete[] fft_buffer;
+}
 
 const float HighPassFilter::b[8] = { 0.66985341f, -4.68897389f, 14.06692168f, -23.44486948f, 23.44486948f, -14.06692168f, 4.68897389f, -0.66985341f };
 const float HighPassFilter::a[8] = { 1.0f, -6.20011746f, 16.51609997f, -24.49999193f, 21.85468509f, -11.72180355f, 3.49983534f, -0.44870359f };
@@ -204,7 +371,10 @@ void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
         std::memmove(window_pointer, window_pointer + skip, working_len * sizeof(float));
 
         highPass.processArray(window_pointer, working_len);
-        //normalize_audio(window_pointer, working_len);
+
+        kill_peaks(window_pointer, working_len, 5, 0.6);
+        //simple_spectral_subtraction(window_pointer, working_len);
+        normalize_audio(window_pointer, working_len);
     }
     Serial.printf(">>> Preprocesamiento finalizado. Tiempo total: %lu ms\n", millis() - startTime);
 }

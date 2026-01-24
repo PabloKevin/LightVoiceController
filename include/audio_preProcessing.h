@@ -23,7 +23,8 @@ public:
     void gaussian_blur(float* data, int len);
     void median_filter(float* data, int len, int kernel_size);
     void process_complete_pipeline(float* audio, int len);
-    void apply_bandpass(float* data, int len, float fs, float lf_cut, float hf_cut);
+    float* kill_peaks(float* audio, int len, int windows = 8, float min_data = 0.8f, float threshold = 50.0f, int trials = 5);
+    void simple_spectral_subtraction(float* audio, int len, float noise_reduction_factor = 1.3f);
 };
 
 void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output);
