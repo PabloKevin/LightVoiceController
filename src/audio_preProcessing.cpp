@@ -368,14 +368,14 @@ void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
         window_pointer = window_pointer + (i*window_len);
 
         // 1. Quitar offset y normalizar base
-        Serial.println("-- Procesamiento parte 1");
+        //Serial.println("-- Procesamiento parte 1");
         remove_dc_offset(window_pointer, window_len);
-        Serial.println("-- Procesamiento parte 2");
+        //Serial.println("-- Procesamiento parte 2");
         normalize_audio(window_pointer, window_len);
         
         
         // 2. Skip inicial (reducimos el puntero, no copiamos)
-        Serial.println("-- Procesamiento parte 3");
+        //Serial.println("-- Procesamiento parte 3");
         int skip = len / 15;
         working_len = len - skip;
         std::memmove(window_pointer, window_pointer + skip, working_len * sizeof(float));
@@ -384,27 +384,27 @@ void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
         
 
         // 3. Filtros (Ahora no consumen RAM extra)
-        Serial.println("-- Procesamiento parte 4");
+        //Serial.println("-- Procesamiento parte 4");
         audio_blur(window_pointer, working_len, 13);
-        Serial.println("-- Procesamiento parte 5");
+        //Serial.println("-- Procesamiento parte 5");
         gaussian_blur(window_pointer, working_len);
-        Serial.println("-- Procesamiento parte 6");
+        //Serial.println("-- Procesamiento parte 6");
         median_filter(window_pointer, working_len, 11);
 
-        Serial.println("-- Procesamiento parte 7");
+        //Serial.println("-- Procesamiento parte 7");
         bandPass.processArray(window_pointer, working_len);
-        Serial.println("-- Procesamiento parte 8");
+        //Serial.println("-- Procesamiento parte 8");
         skip = len / 32;
         working_len = len - skip - len/1024;
         std::memmove(window_pointer, window_pointer + skip, working_len * sizeof(float));
 
-        Serial.println("-- Procesamiento parte 9");
+        //Serial.println("-- Procesamiento parte 9");
         highPass.processArray(window_pointer, working_len);
 
-        Serial.println("-- Procesamiento parte 10");
+        //Serial.println("-- Procesamiento parte 10");
         kill_peaks(window_pointer, working_len, 5, 0.6);
         //simple_spectral_subtraction(window_pointer, working_len);
-        Serial.println("-- Procesamiento parte 11");
+        //Serial.println("-- Procesamiento parte 11");
         normalize_audio(window_pointer, working_len);
     }
     Serial.printf(">>> Preprocesamiento finalizado. Tiempo total: %lu ms\n", millis() - startTime);

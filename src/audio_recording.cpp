@@ -40,11 +40,12 @@ bool recordAudio(float* audioBuffer) {
 }
 
 // Función para enviar los datos al Serial y graficarlos (Serial Plotter)
-void playBackSerial(float* audioBuffer, int len) {
+void playBackSerial(float* buffer, int len) {
     Serial.println("Enviando datos de audio al monitor...");
-    for (int i = 0; i < working_len; i++) {
-        Serial.println((int)(audioBuffer[i]*32767.0f)); //*32767
-        // delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
+    for (int i = 0; i < len; i++) {
+        Serial.println(buffer[i], 6); //*32767
+        delayMicroseconds(100); // Opcional, para no saturar el buffer del PC
     }
     Serial.println("Finish");
+    delay(1000);
 }

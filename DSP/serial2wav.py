@@ -41,25 +41,46 @@ def main():
         # Enviamos 'g' para que el ESP32 empiece a grabar y transmitir
         ser.write(b'g')
         
-        audio_data = []
-        count = 0
-        line = ""
-        while count < SAMPLES_TO_READ and line!="Finish":
-            line = ser.readline().decode('ascii', errors='ignore').strip()
-            
-            try:
-                # Esto aceptará números positivos y negativos (ej: "120", "-45")
-                val = int(line) 
-                audio_data.append(val)
-                count += 1
-                if count % 1000 == 0:
-                    print(f"Recibidas {count}/{SAMPLES_TO_READ} muestras...")
-            except ValueError:
-                # Si la línea es texto (como ">>> Iniciando..."), la ignoramos
-                if line:
-                    print(f"Texto recibido (no audio): {line}")
-
-        save_as_wav(audio_data, OUTPUT_FILE)
+        for i, stage in enumerate(["rawAudio", "processedAudio", "MFCC"]):
+            audio_data = []
+            count = 0
+            line = ""
+            mfccFlag = False
+            while line!="Finish":
+                line = ser.readline().decode('ascii', errors='ignore').strip()
+                if line == "MFCC":
+                    mfccFlag = True
+                try:
+                    # Esto aceptará números positivos y negativos (ej: "120", "-45")
+                    if stage=="rawAudio":
+                        val = int(float(line))
+                        if val > 32767:
+                            val = 32767
+                        elif val < -32767:
+                            val = -32767
+                    elif stage == "processedAudio":
+                        val = int(float(line)*32767)
+                        if val > 32767:
+                            val = 32767
+                        elif val < -32767:
+                            val = -32767
+                    elif stage == "MFCC":
+                        val = float(line)
+                    audio_data.append(val)
+                    count += 1
+                    if count % 1000 == 0:
+                        print(f"Recibidas {count}/{SAMPLES_TO_READ} muestras...")
+                except ValueError:
+                    # Si la línea es texto (como ">>> Iniciando..."), la ignoramos
+                    if line:
+                        print(f"Texto recibido (no audio): {line}")
+            if mfccFlag:
+                OUTPUT_FILE = OUTPUT_PATH + stage + "_prenderLuz_01.npy"
+                np.save(OUTPUT_FILE, np.array(audio_data))
+                print("MFCC guardados en .npy")
+            else:
+                OUTPUT_FILE = OUTPUT_PATH + stage + "_prenderLuz_01.wav"
+                save_as_wav(audio_data, OUTPUT_FILE)
         ser.close()
 
     except Exception as e:

@@ -93,8 +93,9 @@ void code_AudioRecording(void * parameter){
                 isRecording = false;
                 copying=true;
 
-                Serial.println("\nDespués de grabar, previo a enviar audioBuffer por la Queue");
-                printMemoryStats();
+                //Serial.println("\nDespués de grabar, previo a enviar audioBuffer por la Queue");
+                //printMemoryStats();
+                playBackSerial(audioBuffer, TOTAL_SAMPLES);
 
                 xQueueSend(audioQueue, &audioBuffer, portMAX_DELAY); // Enviar dirección
             }
@@ -105,28 +106,35 @@ void code_AudioRecording(void * parameter){
 
 void code_AudioProccessing(void * parameter){
     for(;;) {
-        float* audioBuffer;
+        float* audioBuffer_ptr;
         bool flagPredict = true;
         if (audioQueue != NULL) {
-            if (xQueueReceive(audioQueue, &audioBuffer, portMAX_DELAY)) {
+            if (xQueueReceive(audioQueue, &audioBuffer_ptr, portMAX_DELAY)) {
                 if (copying && !isRecording){
                     copying = false;
-                    processor.process_complete_pipeline(audioBuffer, TOTAL_SAMPLES);
+                    processor.process_complete_pipeline(audioBuffer_ptr, TOTAL_SAMPLES);
 
-                    Serial.println("\nPost Procesamiento de audio");
-                    printMemoryStats();
+                    Serial.println("processedAudio");
+                    playBackSerial(audioBuffer_ptr, working_len);
+
+                    //Serial.println("\nPost Procesamiento de audio");
+                    //printMemoryStats();
 
                     float* input_MFCC = new float[13*64];
                     MFCCExtractor mfcc;
-                    mfcc.extract_mfcc(audioBuffer, working_len, input_MFCC);
+                    mfcc.extract_mfcc(audioBuffer_ptr, working_len, input_MFCC);
                     Serial.println("MFCC extaridos correctamente");
-                    Serial.println("\nPost extracción de MFCCs");
-                    printMemoryStats();
-                    delete[] audioBuffer; // LIBERAR RAM AQUÍ
-                    Serial.println("\nPost eliminación de audioBuffer");
-                    printMemoryStats();
+                    Serial.println("MFCC");
+                    for (int i = 0; i < 13 * 64; i++) {
+                        Serial.println(input_MFCC[i], 6); 
+                    }
+                    Serial.println("Finish");
+                    //Serial.println("\nPost extracción de MFCCs");
+                    //printMemoryStats();
+                    delete[] audioBuffer_ptr; // LIBERAR RAM AQUÍ
+                    //Serial.println("\nPost eliminación de audioBuffer");
+                    //printMemoryStats();
                     xQueueSend(inputQueue, &input_MFCC, portMAX_DELAY);
-                    //playBackSerial(audioBuffer, working_len);
                 }
             }
         }
@@ -136,21 +144,23 @@ void code_AudioProccessing(void * parameter){
 
 void code_Prediction(void * parameter){
     for(;;) {
-        float* input_MFCC;
+        float* input_MFCC_ptr;
         if (inputQueue != NULL) {
-            if (xQueueReceive(inputQueue, &input_MFCC, portMAX_DELAY)) {
+            if (xQueueReceive(inputQueue, &input_MFCC_ptr, portMAX_DELAY)) {
+                unsigned long startTime = millis();
                 if (!setup_MLmodel()){
                     Serial.println("Error during ML model setup");
                 }
-                int action = predict(input_MFCC);
-                Serial.println("\nPost predicción");
-                printMemoryStats();
+                int action = predict(input_MFCC_ptr);
+                //Serial.println("\nPost predicción");
+                //printMemoryStats();
 
                 free_MLmodel();
-                delete[] input_MFCC;
+                delete[] input_MFCC_ptr;
 
-                Serial.println("\nPost eliminación de ML model e input_MFCC");
-                printMemoryStats();
+                //Serial.println("\nPost eliminación de ML model e input_MFCC");
+                //printMemoryStats();
+                Serial.printf(">>> Predicción finalizada. Tiempo total: %lu ms\n", millis() - startTime);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(20));
