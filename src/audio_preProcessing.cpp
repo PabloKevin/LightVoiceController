@@ -1,30 +1,36 @@
 #include "audio_preProcessing.h"
 int working_len;
 
-void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output) {
+void convolve_1d_inplace(float* data, int len, const float* kernel, int kernel_len) {
     int pad = kernel_len / 2;
+    // Creamos un buffer pequeño solo para los valores originales necesarios
+    float* temp_buffer = new float[kernel_len + 1]; 
     
-    // Usamos un buffer temporal para no contaminar los datos de entrada durante el proceso
-    float* temp_out = new float[input_len];
+    // Inicializamos el buffer con los primeros valores
+    for(int i = 0; i < kernel_len; i++) {
+        temp_buffer[i] = (i < pad) ? 0 : data[i - pad];
+    }
 
-    for (int i = 0; i < input_len; i++) {
+    for (int i = 0; i < len; i++) {
         float sum = 0;
         for (int j = 0; j < kernel_len; j++) {
-            int input_idx = i + j - pad;
-            
-            // Manejo de bordes (Zero-padding)
-            if (input_idx >= 0 && input_idx < input_len) {
-                sum += input[input_idx] * kernel[j];
-            }
+            sum += temp_buffer[j] * kernel[j];
         }
-        temp_out[i] = sum;
-    }
-    
-    // Copiar resultado final y liberar memoria
-    memcpy(output, temp_out, sizeof(float) * input_len);
-    delete[] temp_out;
-}
 
+        // Desplazamos el buffer pequeño (ventana deslizante)
+        for(int j = 0; j < kernel_len - 1; j++) {
+            temp_buffer[j] = temp_buffer[j+1];
+        }
+        
+        // El nuevo valor que entra a la ventana viene del audio original
+        int next_idx = i + pad + 1;
+        temp_buffer[kernel_len - 1] = (next_idx < len) ? data[next_idx] : 0;
+
+        // Guardamos el resultado directamente en el array original
+        data[i] = sum;
+    }
+    delete[] temp_buffer;
+}
 
 void AudioProcessor::normalize_audio(float* data, int len) {
     float max_val = 0.0001f;
@@ -53,7 +59,7 @@ void AudioProcessor::audio_blur(float* data, int len, int kernel_size) {
     for (int i=0; i<kernel_size; i++){
         kernel[i] = 1.0f/kernel_size;
     }
-    convolve_1d_same(data, len, kernel, kernel_size, data);
+    convolve_1d_inplace(data, len, kernel, kernel_size);
 }
 
 void AudioProcessor::gaussian_blur(float* data, int len) {
@@ -65,37 +71,51 @@ void AudioProcessor::gaussian_blur(float* data, int len) {
     for (int i=0; i<kernel_size; i++){
         kernel[i] = 1.0f/kernel_size;
     }
-    convolve_1d_same(data, len, kernel, kernel_size, data);
+    convolve_1d_inplace(data, len, kernel, kernel_size);
 }
 
 void AudioProcessor::median_filter(float* data, int len, int kernel_size) {
+    if (kernel_size < 3) return;
     if (kernel_size > 21) kernel_size = 21;
-    if (kernel_size < 3) return; // Un filtro de mediana de 1 no hace nada
 
-    // Necesitamos un buffer temporal para no leer datos ya filtrados
-    float* temp_output = new float[len];
-    // Copiamos los bordes que no se filtrarán
-    std::memcpy(temp_output, data, len * sizeof(float));
-
-    float window[kernel_size]; // Buffer estático en el stack para la ventana
     int k_half = kernel_size / 2;
+    
+    // Buffer circular pequeño para mantener los valores originales necesarios
+    // Tamaño: kernel_size
+    float* old_values = new float[kernel_size];
+    float* sort_window = new float[kernel_size];
 
-    for (int i = k_half; i < len - k_half; i++) {
-        // Llenar la ventana con los datos ORIGINALES
-        for(int j = 0; j < kernel_size; j++) {
-            window[j] = data[i - k_half + j];
-        }
-        
-        // Ordenar para encontrar la mediana
-        std::sort(window, window + kernel_size);
-        
-        // Guardar en el buffer TEMPORAL
-        temp_output[i] = window[k_half];
+    // Inicializar el buffer con los primeros valores del audio
+    for (int i = 0; i < kernel_size; i++) {
+        old_values[i] = data[i];
     }
 
-    // Copiar el resultado final al buffer original
-    std::memcpy(data, temp_output, len * sizeof(float));
-    delete[] temp_output;
+    for (int i = k_half; i < len - k_half; i++) {
+        // 1. Copiamos los valores del buffer circular al de ordenamiento
+        std::memcpy(sort_window, old_values, kernel_size * sizeof(float));
+        
+        // 2. Calculamos la mediana
+        std::sort(sort_window, sort_window + kernel_size);
+        
+        // 3. El valor actual del audio se actualiza con la mediana
+        // Pero antes, actualizamos el buffer circular para la siguiente iteración:
+        // El valor que sale es el que estaba en old_values[0]
+        // El valor que entra es el siguiente en el stream original
+        float next_val = data[i + k_half + 1]; 
+        
+        data[i] = sort_window[k_half];
+
+        // 4. Desplazamos el buffer circular (Shift left)
+        for (int j = 0; j < kernel_size - 1; j++) {
+            old_values[j] = old_values[j + 1];
+        }
+        if (i + k_half + 1 < len) {
+            old_values[kernel_size - 1] = next_val;
+        }
+    }
+
+    delete[] old_values;
+    delete[] sort_window;
 }
 
 float* AudioProcessor::kill_peaks(float* audio, int len, int windows, float min_data, float threshold, int trials) {
@@ -348,11 +368,14 @@ void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
         window_pointer = window_pointer + (i*window_len);
 
         // 1. Quitar offset y normalizar base
+        Serial.println("-- Procesamiento parte 1");
         remove_dc_offset(window_pointer, window_len);
+        Serial.println("-- Procesamiento parte 2");
         normalize_audio(window_pointer, window_len);
         
         
         // 2. Skip inicial (reducimos el puntero, no copiamos)
+        Serial.println("-- Procesamiento parte 3");
         int skip = len / 15;
         working_len = len - skip;
         std::memmove(window_pointer, window_pointer + skip, working_len * sizeof(float));
@@ -361,19 +384,27 @@ void AudioProcessor::process_complete_pipeline(float* window_pointer, int len) {
         
 
         // 3. Filtros (Ahora no consumen RAM extra)
+        Serial.println("-- Procesamiento parte 4");
         audio_blur(window_pointer, working_len, 13);
+        Serial.println("-- Procesamiento parte 5");
         gaussian_blur(window_pointer, working_len);
+        Serial.println("-- Procesamiento parte 6");
         median_filter(window_pointer, working_len, 11);
-        
+
+        Serial.println("-- Procesamiento parte 7");
         bandPass.processArray(window_pointer, working_len);
+        Serial.println("-- Procesamiento parte 8");
         skip = len / 32;
         working_len = len - skip - len/1024;
         std::memmove(window_pointer, window_pointer + skip, working_len * sizeof(float));
 
+        Serial.println("-- Procesamiento parte 9");
         highPass.processArray(window_pointer, working_len);
 
+        Serial.println("-- Procesamiento parte 10");
         kill_peaks(window_pointer, working_len, 5, 0.6);
         //simple_spectral_subtraction(window_pointer, working_len);
+        Serial.println("-- Procesamiento parte 11");
         normalize_audio(window_pointer, working_len);
     }
     Serial.printf(">>> Preprocesamiento finalizado. Tiempo total: %lu ms\n", millis() - startTime);

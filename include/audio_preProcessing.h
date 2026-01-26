@@ -23,7 +23,7 @@ public:
     void simple_spectral_subtraction(float* audio, int len, float noise_reduction_factor = 1.3f);
 };
 
-void convolve_1d_same(float* input, int input_len, const float* kernel, int kernel_len, float* output);
+void convolve_1d_inplace(float* data, int len, const float* kernel, int kernel_len) ;
 
 
 class HighPassFilter {
